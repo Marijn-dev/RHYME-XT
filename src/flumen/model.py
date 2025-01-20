@@ -178,7 +178,7 @@ class CONV_Encoder(nn.Module):
         self.conv3 = nn.Conv1d(in_channels=8,out_channels=4,kernel_size=3,padding=1)
         
         # linear layer to get right dimensionality of hidden states
-        self.fc = nn.Linear(in_features=48,out_features=out_size)
+        self.fc = nn.Linear(in_features=100,out_features=out_size)
 
     def forward(self, input):
         # reshape input from [1,batch_size,channel] -> [batch_size,1,channel] ??
@@ -188,8 +188,9 @@ class CONV_Encoder(nn.Module):
         input = self.activation(self.conv2(input))
         input = self.pool(input)
         input = self.activation(self.conv3(input))
-        # print("encoder:", input.shape)
-        input = self.pool(input)
+        
+        ## omit this one cause more downsizing isnt needed
+        # input = self.pool(input)
 
         # flatten  
         input = input.view(input.size(0),1,-1)
@@ -211,33 +212,38 @@ class CONV_Decoder(nn.Module):
         self.pool = nn.MaxPool1d(kernel_size=2,stride=2)
         
         # convolutional layers
-        self.TransposeConv1 = nn.ConvTranspose1d(in_channels=4,out_channels=4,kernel_size=2,stride=2,padding=0,output_padding=1)
+        # self.TransposeConv1 = nn.ConvTranspose1d(in_channels=4,out_channels=4,kernel_size=2,stride=2,padding=0,output_padding=0)
         self.TransposeConv2 = nn.ConvTranspose1d(in_channels=4,out_channels=8,kernel_size=2,stride=2,padding=0)
         self.TransposeConv3 = nn.ConvTranspose1d(in_channels=8,out_channels=16,kernel_size=2,stride=2,padding=0)
         self.TransposeConv4 = nn.ConvTranspose1d(in_channels=16,out_channels=1,kernel_size=3,stride=1,padding=1)
         
         # linear layer to get right dimensionality of hidden states
-        self.fc = nn.Linear(in_features=in_size,out_features=48)
+        self.fc = nn.Linear(in_features=in_size,out_features=100)
         self.fc2 = nn.Linear(in_features=100,out_features=out_size)
 
     def forward(self, input):
-        # reshape input from [1,batch_size,channel] -> [batch_size,1,channel] ??
+        # reshape input from [1,batch_size,channel] -> [batch_size,1,channel] 
         input = input.view(-1,1,self.in_size)
 
         # Linear Layer receiving Ld
         input = self.activation(self.fc(input))
 
         # reshape to CNN input
-        input = input.view(-1,4,12)
+        # input = input.view(-1,4,12)
+        input = input.view(-1,4,25)
 
         # ConvTranspose layers
-        input = self.activation(self.TransposeConv1(input))
+        # input = self.activation(self.TransposeConv1(input))
+        
         input = self.activation(self.TransposeConv2(input))
         input = self.activation(self.TransposeConv3(input))
         input = self.activation(self.TransposeConv4(input))
 
         # reshape for linear layer
-        input = input.view(input.size(0),1,-1)
+        # input = input.view(input.size(0),1,-1)
+        # print(input.shape)
+        
+        # final layer is linear layer
         input = self.fc2(input)
 
         # reshape for correct output
