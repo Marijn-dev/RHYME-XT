@@ -88,6 +88,7 @@ def train(experiment: Experiment, model, loss_fn, optimizer, sched,
 
     # Log the architecture to wandb.config
     wandb.watch(model, log="all", log_graph=True)
+    wandb.summary["model"] = model
 
     print(header_msg)
     print('=' * len(header_msg))

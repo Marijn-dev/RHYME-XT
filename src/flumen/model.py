@@ -169,7 +169,7 @@ class CONV_Encoder(nn.Module):
         self.in_size = in_size
         self.out_size = out_size
         # activation and pool layer
-        self.activation = nn.ReLU()
+        self.activation = nn.Tanh()
         self.pool = nn.MaxPool1d(kernel_size=2,stride=2)
         
         # convolutional layers
@@ -208,7 +208,7 @@ class CONV_Decoder(nn.Module):
         self.in_size = in_size
         self.out_size = out_size
         # activation and pool layer
-        self.activation = nn.ReLU()
+        self.activation = nn.Tanh()
         self.pool = nn.MaxPool1d(kernel_size=2,stride=2)
         
         # convolutional layers
