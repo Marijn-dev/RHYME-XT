@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 
-from . import CausalFlowModel
+from . import CausalFlowModel, CausalFlowModelV2
 from .train import EarlyStopping
 
 from .experiment import Experiment, instantiate_model
@@ -26,7 +26,7 @@ def whiten_targets(data):
 def prepare_experiment(data, args):
     train_data, val_data, test_data = data.get_datasets(
         args.max_seq_len, args.samples_per_state)
-
+    
     if args.whiten_data:
         train_mean, train_std, train_istd = whiten_targets(
             (train_data, val_data, test_data))

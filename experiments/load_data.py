@@ -1,9 +1,12 @@
 import torch
-
+import os, sys
 torch.set_default_dtype(torch.float32)
-
-from flumen import (prepare_experiment, get_arg_parser, train, print_gpu_info)
-
+sys.path.append(os.path.abspath('../src'))
+# from flumen import (prepare_experiment, get_arg_parser, train, print_gpu_info)
+from flumen.run import prepare_experiment
+from flumen.utils import get_arg_parser, print_gpu_info
+from flumen.train import train
+import wandb
 
 def main():
     ap = get_arg_parser()
@@ -32,13 +35,16 @@ def main():
             data.generator.noise_std = args.noise_std
 
     experiment, train_args = prepare_experiment(data, args)
-
+    wandb.init(project='Flumen',name=args.experiment_id,config=args)
+    
     experiment.generator = data.generator
 
     train_time = train(experiment, *train_args)
     print(f"Training took {train_time:.2f} seconds.")
+    wandb.finish()
 
 
+    
 if __name__ == '__main__':
     print_gpu_info()
     main()

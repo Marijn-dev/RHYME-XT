@@ -1,4 +1,4 @@
-from .model import CausalFlowModel
+from .model import CausalFlowModel, CausalFlowModelV2
 from .trajectory import TrajectoryDataset, RawTrajectoryDataset
 from .run import prepare_experiment
 from .train import train, validate

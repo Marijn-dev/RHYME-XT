@@ -8,7 +8,7 @@ from inspect import cleandoc
 from shlex import quote
 from copy import deepcopy
 
-from .model import CausalFlowModel
+from .model import CausalFlowModel, CausalFlowModelV2
 
 
 def timestamp_str(timestamp):
@@ -40,7 +40,7 @@ class Experiment:
 
     def __init__(self, args, dims, train_stats, save_root):
         self.model = None
-
+        
         self.train_id = uuid4()
 
         self.command_line = sys.argv.copy()

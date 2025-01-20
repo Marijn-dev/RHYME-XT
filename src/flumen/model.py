@@ -36,7 +36,7 @@ class CausalFlowModel(nn.Module):
         self.x_dnn = FFNet(in_size=state_dim,
                            out_size=x_dnn_osz,
                            hidden_size=encoder_depth *
-                           (encoder_size * x_dnn_osz+1, ), # hidden size is equal encoder depth (encoder_size*x_dnn_osz)
+                           (encoder_size * x_dnn_osz, ), # hidden size is equal encoder depth (encoder_size*x_dnn_osz)
                         # if encoder depth = 2 -> (encoder_size*x_dnn_osz, encoder_size*x_dnn_osz)
                            use_batch_norm=use_batch_norm)
 
@@ -95,7 +95,6 @@ class CausalFlowModelV2(nn.Module):
         )
 
         ### ENCODER ###
-        
         x_dnn_osz = control_rnn_depth * control_rnn_size
         
         # Convolutional encoder
@@ -103,7 +102,6 @@ class CausalFlowModelV2(nn.Module):
                                out_size=x_dnn_osz)
         
         ### DECODER ###
-
         u_dnn_isz = control_rnn_size
         # Convolutional decoder 
         self.decoder = CONV_Decoder(in_size=u_dnn_isz,
