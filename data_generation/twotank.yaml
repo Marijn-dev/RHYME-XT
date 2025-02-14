@@ -1,0 +1,13 @@
+dynamics:
+  name: TwoTank
+  args: {}
+sequence_generator:
+  name: Product
+  args:
+    - name: GaussianSqWave
+      args:
+        period: 5
+    - name: GaussianSqWave
+      args:
+        period: 20
+control_delta: 0.2

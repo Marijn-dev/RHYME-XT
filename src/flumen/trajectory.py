@@ -77,7 +77,7 @@ class RawTrajectoryDataset(Dataset):
                    noise_std=noise_std)
 
     def __len__(self):
-        return (self.init_state)
+        return len(self.init_state)
 
     def __getitem__(self, index):
         return (self.init_state[index], self.init_state_noise[index],

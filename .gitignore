@@ -167,3 +167,7 @@ outputs/
 *.pdf
 *.csv
 .DS_Store
+
+wandb/
+data/
+artifacts/
