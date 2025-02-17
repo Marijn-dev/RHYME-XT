@@ -140,7 +140,6 @@ def main():
     )
 
     start = time.time()
-    best_epoch = 0
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
@@ -161,14 +160,17 @@ def main():
         )
 
         if early_stop.best_model:
-            best_epoch = epoch
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
+            run.summary["best_train"] = train_loss
+            run.summary["best_val"] = val_loss
+            run.summary["best_test"] = test_loss
+            run.summary["best_epoch"] = epoch + 1
+
         wandb.log({
             'time': time.time() - start,
-            'best_epoch': best_epoch,
-            'epoch': epoch,
+            'epoch': epoch + 1,
             'lr': sched.get_last_lr()[0],
             'train_loss': train_loss,
             'val_loss': val_loss,
