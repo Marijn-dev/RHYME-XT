@@ -94,7 +94,7 @@ def main():
     # Prepare for saving the model
     model_save_dir = Path(
         f"./outputs/{sys_args.name}/{sys_args.name}_{run.id}")
-    model_save_dir.mkdir(exist_ok=True)
+    model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Save local copy of metadata
     with open(model_save_dir / "metadata.pkl", 'wb') as f:
