@@ -4,7 +4,7 @@ import numpy as np
 
 from flumen import CausalFlowModel
 from flumen.utils import pack_model_inputs
-from data_generation.generate_data import make_trajectory_sampler
+from generate_data import make_trajectory_sampler
 
 from argparse import ArgumentParser
 
@@ -39,6 +39,9 @@ def main():
         api = wandb.Api()
         model_artifact = api.artifact(args.path)
         model_path = Path(model_artifact.download())
+
+        model_run = model_artifact.logged_by()
+        print(model_run.summary)
     else:
         model_path = Path(args.path)
 
@@ -66,8 +69,7 @@ def main():
 
     time_horizon = metadata["data_args"]["time_horizon"]
 
-    for _ in range(10):
-
+    while True:
         time_integrate = time()
         x0, t, y, u = sampler.get_example(time_horizon=time_horizon,
                                           n_samples=int(1 +
