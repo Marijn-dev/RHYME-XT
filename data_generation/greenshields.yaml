@@ -1,0 +1,19 @@
+dynamics:
+  name: GreenshieldsTraffic
+  args:
+    n: 100
+    v0: 1.0
+sequence_generator:
+  name: UniformSqWave
+  args:
+    period: 1
+    min: 0.
+    max: 0.5
+
+initial_state_generator:
+  name: GreenshieldsInitialState
+  args:
+    n_cells: 100
+    n_sections: 4
+
+control_delta: 1.0

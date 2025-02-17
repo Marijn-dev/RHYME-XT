@@ -1,0 +1,9 @@
+dynamics:
+  name: LinearSys
+  args:
+    a: [[-0.01, 1], [0, -1]]
+    b: [[0,], [1,]]
+sequence_generator:
+  name: RandomWalkSequence
+  args: {}
+control_delta: 1.0

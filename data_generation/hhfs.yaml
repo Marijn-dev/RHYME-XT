@@ -1,0 +1,11 @@
+dynamics:
+  name: HodgkinHuxleyFS
+  args: {}
+sequence_generator:
+  name: UniformSqWave
+  args:
+    min: 0.0
+    max: 1.0
+    period: 10
+
+control_delta: 0.1

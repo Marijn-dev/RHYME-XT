@@ -1,0 +1,14 @@
+dynamics:
+  name: FitzHughNagumo
+  args:
+    tau: 0.8
+    a: -0.3
+    b: 1.4
+sequence_generator:
+  name: LogNormalSqWave
+  args:
+    mean: -0.7
+    std: 0.5
+    period: 8
+
+control_delta: 0.2

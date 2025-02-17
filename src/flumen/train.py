@@ -1,7 +1,7 @@
 import torch
 import time
 from .experiment import Experiment
-import wandb 
+
 
 def prep_inputs(x0, y, u, lengths, device):
     sort_idxs = torch.argsort(lengths, descending=True)
@@ -81,27 +81,18 @@ class EarlyStopping:
 def train(experiment: Experiment, model, loss_fn, optimizer, sched,
           early_stop: EarlyStopping, train_dl, val_dl, test_dl, device,
           max_epochs):
-    
     header_msg = f"{'Epoch':>5} :: {'Loss (Train)':>16} :: " \
         f"{'Loss (Val)':>16} :: {'Loss (Test)':>16} :: {'Best (Val)':>16}"
 
-
-    # Log the architecture to wandb.config
-    wandb.watch(model, log="all", log_graph=True)
-    wandb.summary["model"] = model
-
     print(header_msg)
     print('=' * len(header_msg))
+
     # Evaluate initial loss
     model.eval()
     train_loss = validate(train_dl, loss_fn, model, device)
     val_loss = validate(val_dl, loss_fn, model, device)
     test_loss = validate(test_dl, loss_fn, model, device)
 
-    wandb.log({"train/loss": train_loss,
-                  "val/loss": val_loss,
-                  "test/loss": test_loss}, step=0)
-    
     early_stop.step(val_loss)
     experiment.register_progress(train_loss, val_loss, test_loss,
                                  early_stop.best_model)
@@ -130,13 +121,6 @@ def train(experiment: Experiment, model, loss_fn, optimizer, sched,
             f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
         )
 
-        # log results of epoch to wandb
-        wandb.log({"train/loss": train_loss,
-                  "val/loss": val_loss,
-                  "test/loss": test_loss,
-                  "best/val loss":early_stop.best_val_loss},step=epoch + 1)
-
-
         if early_stop.best_model:
             experiment.save_model(model)
 
@@ -149,6 +133,4 @@ def train(experiment: Experiment, model, loss_fn, optimizer, sched,
     train_time = time.time() - start
     experiment.save(train_time)
 
-    wandb.summary["test loss"] = test_loss
-    wandb.summary["train time"] = train_time
     return train_time
