@@ -8,7 +8,7 @@ from generate_data import make_trajectory_sampler
 
 from argparse import ArgumentParser
 
-import pickle
+import yaml
 from pathlib import Path
 import sys
 from pprint import pprint
@@ -47,8 +47,8 @@ def main():
 
     with open(model_path / "state_dict.pth", 'rb') as f:
         state_dict = torch.load(f, weights_only=True)
-    with open(model_path / "metadata.pkl", 'rb') as f:
-        metadata = pickle.load(f)
+    with open(model_path / "metadata.yaml", 'r') as f:
+        metadata: dict = yaml.load(f, Loader=yaml.FullLoader)
 
     pprint(metadata)
 

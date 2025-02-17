@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 
 torch.set_default_dtype(torch.float32)
 
-import pickle
+import pickle, yaml
 from pathlib import Path
 
 from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset
@@ -15,7 +15,7 @@ import time
 import wandb
 
 hyperparams = {
-    'control_rnn_size': 16,
+    'control_rnn_size': 12,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 2,
@@ -24,9 +24,9 @@ hyperparams = {
     'batch_size': 128,
     'lr': 0.001,
     'n_epochs': 1000,
-    'es_patience': 50,
+    'es_patience': 20,
     'es_delta': 1e-7,
-    'sched_patience': 20,
+    'sched_patience': 10,
     'sched_factor': 2,
     'loss': "mse",
 }
@@ -97,8 +97,8 @@ def main():
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Save local copy of metadata
-    with open(model_save_dir / "metadata.pkl", 'wb') as f:
-        pickle.dump(model_metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(model_save_dir / "metadata.yaml", 'w') as f:
+        yaml.dump(model_metadata, f)
 
     model = CausalFlowModel(**model_args)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
