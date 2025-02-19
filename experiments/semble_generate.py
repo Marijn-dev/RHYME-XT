@@ -18,17 +18,18 @@ def main():
 
     sampler = make_trajectory_sampler(settings)
     postprocess = get_postprocess(settings["dynamics"]["name"])
-
-    train_data, val_data, test_data = generate(args,
+    
+    # PHI is U of SVD of concatenated train_data trajectories
+    train_data, val_data, test_data,PHI = generate(args,
                                                sampler,
                                                postprocess=postprocess)
-
     data = {
         "train": train_data,
         "val": val_data,
         "test": test_data,
         "settings": settings,
         "args": vars(args),
+        "PHI":PHI
     }
 
     output_dir = Path("./data/")

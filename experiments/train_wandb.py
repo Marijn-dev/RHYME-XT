@@ -66,6 +66,7 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
+    
     train_data = TrajectoryDataset(data["train"])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
@@ -129,9 +130,10 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, loss, model, device)
-    val_loss = validate(val_dl, loss, model, device)
-    test_loss = validate(test_dl, loss, model, device)
+    train_loss = validate(train_dl, data['PHI'],loss, model, device)
+    val_loss = validate(val_dl, data['PHI'],loss, model, device)
+    test_loss = validate(test_dl,data['PHI'], loss, model,device)
+
 
     early_stop.step(val_loss)
     print(
@@ -144,12 +146,12 @@ def main():
     for epoch in range(wandb.config['n_epochs']):
         model.train()
         for example in train_dl:
-            train_step(example, loss, model, optimiser, device)
+            train_step(example, data['PHI'],loss, model, optimiser, device)
 
         model.eval()
-        train_loss = validate(train_dl, loss, model, device)
-        val_loss = validate(val_dl, loss, model, device)
-        test_loss = validate(test_dl, loss, model, device)
+        train_loss = validate(train_dl,data['PHI'], loss, model, device)
+        val_loss = validate(val_dl, data['PHI'],loss, model, device)
+        test_loss = validate(test_dl, data['PHI'],loss, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)

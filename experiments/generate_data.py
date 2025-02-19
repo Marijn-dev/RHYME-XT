@@ -5,6 +5,8 @@ from semble.initial_state import get_initial_state_generator
 
 from argparse import ArgumentParser, ArgumentTypeError
 from flumen import RawTrajectoryDataset
+import torch
+import numpy as np
 
 
 def percentage(value):
@@ -68,7 +70,7 @@ def parse_args():
 def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     if args.data_split[0] + args.data_split[1] >= 100:
         raise Exception("Invalid data split.")
-
+    
     n_val = int(args.n_trajectories * (args.data_split[0] / 100.))
     n_test = int(args.n_trajectories * (args.data_split[1] / 100.))
     n_train = args.n_trajectories - n_val - n_test
@@ -91,6 +93,15 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
 
     test_data = [get_example() for _ in range(n_test)]
 
+
+    trajectories = []
+    for trajectory in train_data:
+        trajectories.append(trajectory['state'])
+
+    trajectories_conc = np.concatenate(trajectories,axis=0) # combine trajectories
+    PHI, _, _ = np.linalg.svd(np.transpose(trajectories_conc),full_matrices=False)
+    PHI = torch.from_numpy(PHI).type(torch.get_default_dtype())
+
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
                                       delta=trajectory_sampler._delta,
@@ -108,12 +119,15 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
                                      delta=trajectory_sampler._delta,
                                      output_mask=trajectory_sampler._dyn.mask,
                                      noise_std=args.noise_std)
+    
+    
 
     for d in (train_data, val_data, test_data):
         for p in postprocess:
             p(d)
 
-    return train_data, val_data, test_data
+    
+    return train_data, val_data, test_data, PHI
 
 
 def make_trajectory_sampler(settings):

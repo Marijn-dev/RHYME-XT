@@ -24,7 +24,7 @@ def prep_inputs(x0, y, u, lengths, device):
     return x0, y, u, deltas
 
 
-def validate(data, loss_fn, model, device):
+def validate(data, PHI,loss_fn, model, device):
     vl = 0.
 
     with torch.no_grad():
@@ -37,7 +37,7 @@ def validate(data, loss_fn, model, device):
     return model.state_dim * vl / len(data)
 
 
-def train_step(example, loss_fn, model, optimizer, device):
+def train_step(example,PHI, loss_fn, model, optimizer, device):
     x0, y, u, deltas = prep_inputs(*example, device)
 
     optimizer.zero_grad()
