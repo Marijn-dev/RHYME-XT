@@ -1,0 +1,22 @@
+dynamics:
+  name: Heat
+  args:
+    n: 50
+    alpha: 1 # [cm^2/s]
+    input_locations: [[10, 30], [70, 90]] # locations of inputs on the rod [cm]
+    L: 100 # [cm] length of the rod
+sequence_generator:
+  name: Product
+  args:
+    - name: UniformSqWave
+      args:
+        period: 1
+        min: 0
+        max: 3.0
+    - name: UniformSqWave
+      args:
+        period: 1
+        min: 0
+        max: 3.0
+
+control_delta: 0.2
