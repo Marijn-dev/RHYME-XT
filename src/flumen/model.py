@@ -31,13 +31,12 @@ class CausalFlowModel(nn.Module):
         assert self.POD_modes <= self.state_dim,  'POD_modes too high'
 
         if self.POD_enabled:
-            in_size_encoder,out_size_encoder,control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+            in_size_encoder,out_size_decoder,control_dim = self.POD_modes,self.POD_modes,self.POD_modes
 
         else:
             in_size_encoder = state_dim
-            out_size_encoder = output_dim
+            out_size_decoder = output_dim
 
-        print(control_dim)
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + control_dim,
             hidden_size=control_rnn_size,
@@ -57,7 +56,7 @@ class CausalFlowModel(nn.Module):
 
         u_dnn_isz = control_rnn_size
         self.u_dnn = FFNet(in_size=u_dnn_isz,
-                           out_size=out_size_encoder,
+                           out_size=out_size_decoder,
                            hidden_size=decoder_depth *
                            (decoder_size * u_dnn_isz, ),
                            use_batch_norm=use_batch_norm)
