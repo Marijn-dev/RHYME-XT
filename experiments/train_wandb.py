@@ -22,6 +22,8 @@ hyperparams = {
     'decoder_size': 1,
     'decoder_depth': 2,
     'batch_size': 128,
+    'use_POD':True,
+    'POD_modes':2,
     'lr': 0.001,
     'n_epochs': 1000,
     'es_patience': 20,
@@ -81,6 +83,8 @@ def main():
         'encoder_depth': wandb.config['encoder_depth'],
         'decoder_size': wandb.config['decoder_size'],
         'decoder_depth': wandb.config['decoder_depth'],
+        'use_POD': wandb.config['use_POD'],
+        'POD_modes':wandb.config['POD_modes'],
         'use_batch_norm': False,
     }
 

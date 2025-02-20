@@ -23,6 +23,8 @@ def main():
     train_data, val_data, test_data,PHI = generate(args,
                                                sampler,
                                                postprocess=postprocess)
+
+
     data = {
         "train": train_data,
         "val": val_data,
@@ -52,6 +54,28 @@ def get_postprocess(dynamics: str):
             ]
     return []
 
+def Spatial_input(data,settings):
+    print(settings["dynamics"]["name"])
+
+def rejection_sampling_single_neuro(data):
+    for (k, y) in enumerate(data.state):
+        p = y[:, 0].flatten()
+        p_min = p.min()
+        p = 1e-4 + ((p - p_min) / (p.max() - p_min))
+
+        likelihood_ratio = p / torch.mean(p)
+        lr_bound = torch.max(likelihood_ratio)
+
+        u = torch.rand((len(likelihood_ratio), ))
+        keep_idxs = (u <= (likelihood_ratio / lr_bound))
+        keep_idxs[0] = True
+
+        peaks, _ = find_peaks(y[:, 0])
+        keep_idxs[peaks] = True
+
+        data.state[k] = y[keep_idxs, :]
+        data.state_noise[k] = data.state_noise[k][keep_idxs, :]
+        data.time[k] = data.time[k][keep_idxs, :]
 
 def rejection_sampling_single_neuron(data):
     for (k, y) in enumerate(data.state):
@@ -72,7 +96,6 @@ def rejection_sampling_single_neuron(data):
         data.state[k] = y[keep_idxs, :]
         data.state_noise[k] = data.state_noise[k][keep_idxs, :]
         data.time[k] = data.time[k][keep_idxs, :]
-
 
 def rejection_sampling_two_neuron(data):
     for (k, y) in enumerate(data.state):

@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class CausalFlowModel(nn.Module):
@@ -14,15 +15,29 @@ class CausalFlowModel(nn.Module):
                  encoder_depth,
                  decoder_size,
                  decoder_depth,
+                 use_POD,
+                 POD_modes,
                  use_batch_norm=False):
         super(CausalFlowModel, self).__init__()
 
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.output_dim = output_dim
-
+        
         self.control_rnn_size = control_rnn_size
 
+        self.POD_enabled = use_POD
+        self.POD_modes = POD_modes
+        assert self.POD_modes <= self.state_dim,  'POD_modes too high'
+
+        if self.POD_enabled:
+            in_size_encoder,out_size_encoder,control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+
+        else:
+            in_size_encoder = state_dim
+            out_size_encoder = output_dim
+
+        print(control_dim)
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + control_dim,
             hidden_size=control_rnn_size,
@@ -33,7 +48,7 @@ class CausalFlowModel(nn.Module):
 
         x_dnn_osz = control_rnn_depth * control_rnn_size
 
-        self.x_dnn = FFNet(in_size=state_dim,
+        self.x_dnn = FFNet(in_size=in_size_encoder,
                            out_size=x_dnn_osz,
                            hidden_size=encoder_depth *
                            (encoder_size * x_dnn_osz, ), # hidden size is equal encoder depth (encoder_size*x_dnn_osz)
@@ -42,17 +57,32 @@ class CausalFlowModel(nn.Module):
 
         u_dnn_isz = control_rnn_size
         self.u_dnn = FFNet(in_size=u_dnn_isz,
-                           out_size=output_dim,
+                           out_size=out_size_encoder,
                            hidden_size=decoder_depth *
                            (decoder_size * u_dnn_isz, ),
                            use_batch_norm=use_batch_norm)
 
-    def forward(self, x, rnn_input, deltas):
-        h0 = self.x_dnn(x)
+    def forward(self, x, rnn_input,PHI, deltas):
+        
+        if self.POD_enabled: # project inputs to the models
+            x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
+
+            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+            deltas = unpadded_u[:, :, -1:]                                    # extract deltas
+            u = unpadded_u[:, :, :-1]                                         # extract inputs values
+            u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
+            u_deltas = torch.cat((u_projected, deltas), dim=-1)  
+            input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
+
+        else:
+            x0 = x
+            input = rnn_input
+
+        h0 = self.x_dnn(x0)
         h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
         c0 = torch.zeros_like(h0)
 
-        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
+        rnn_out_seq_packed, _ = self.u_rnn(input, (h0, c0))
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
 
@@ -60,9 +90,13 @@ class CausalFlowModel(nn.Module):
         h_shift[:, 0, :] = h0[-1]
 
         encoded_controls = (1 - deltas) * h_shift + deltas * h
-        output = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
+        output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
-
+        if self.POD_enabled:
+            output = torch.einsum("ni,bi->bn",PHI[:,:self.POD_modes],output_flow)
+            
+        else:
+            output = output_flow
         return output
 
 class CausalFlowModelV2(nn.Module):

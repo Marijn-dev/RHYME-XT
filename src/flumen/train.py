@@ -31,7 +31,7 @@ def validate(data, PHI,loss_fn, model, device):
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
 
-            y_pred = model(x0, u, deltas)
+            y_pred = model(x0, u,PHI.to(device), deltas)
             vl += loss_fn(y, y_pred).item()
 
     return model.state_dim * vl / len(data)
@@ -42,7 +42,7 @@ def train_step(example,PHI, loss_fn, model, optimizer, device):
 
     optimizer.zero_grad()
 
-    y_pred = model(x0, u, deltas)
+    y_pred = model(x0, u, PHI.to(device),deltas)
     loss = model.state_dim * loss_fn(y, y_pred)
 
     loss.backward()

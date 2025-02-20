@@ -78,6 +78,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     def get_example():
         x0, t, y, u = trajectory_sampler.get_example(args.time_horizon,
                                                      args.n_samples)
+
         return {
             "init_state": x0,
             "time": t,
@@ -106,21 +107,22 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
                                       *trajectory_sampler.dims(),
                                       delta=trajectory_sampler._delta,
                                       output_mask=trajectory_sampler._dyn.mask,
+                                      input_mask=trajectory_sampler._dyn.input_mask,
                                       noise_std=args.noise_std)
 
     val_data = RawTrajectoryDataset(val_data,
                                     *trajectory_sampler.dims(),
                                     delta=trajectory_sampler._delta,
                                     output_mask=trajectory_sampler._dyn.mask,
+                                    input_mask=trajectory_sampler._dyn.input_mask,
                                     noise_std=args.noise_std)
 
     test_data = RawTrajectoryDataset(test_data,
                                      *trajectory_sampler.dims(),
                                      delta=trajectory_sampler._delta,
                                      output_mask=trajectory_sampler._dyn.mask,
+                                     input_mask=trajectory_sampler._dyn.input_mask,
                                      noise_std=args.noise_std)
-    
-    
 
     for d in (train_data, val_data, test_data):
         for p in postprocess:
@@ -133,6 +135,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
 def make_trajectory_sampler(settings):
     dynamics = get_dynamics(settings["dynamics"]["name"],
                             settings["dynamics"]["args"])
+
 
     sequence_generator = get_sequence_generator(
         settings["sequence_generator"]["name"],

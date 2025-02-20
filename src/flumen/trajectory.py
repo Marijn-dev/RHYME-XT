@@ -12,6 +12,7 @@ class RawTrajectoryDataset(Dataset):
                  output_dim,
                  delta,
                  output_mask,
+                 input_mask,
                  noise_std=0.,
                  **kwargs):
         self.__dict__.update(kwargs)
@@ -22,6 +23,8 @@ class RawTrajectoryDataset(Dataset):
         self.output_dim = output_dim
         self.delta = delta
         self.mask = output_mask
+        self.input_mask = input_mask
+       
 
         self.init_state = torch.empty(
             (n_traj, self.state_dim)).type(torch.get_default_dtype())
@@ -49,11 +52,18 @@ class RawTrajectoryDataset(Dataset):
                 torch.normal(mean=0.,
                              std=noise_std,
                              size=self.state[-1].size()))
+            
+            # transform inputs
+            if self.input_mask is not None:
+                control = sample['control'] @ self.input_mask.T
+                self.control_dim = control.shape[1]
+            else:
+                control = sample['control']
 
             self.control_seq.append(
-                torch.from_numpy(sample["control"]).type(
+                torch.from_numpy(control).type(
                     torch.get_default_dtype()).reshape((-1, self.control_dim)))
-
+            
     @classmethod
     def generate(cls, generator, time_horizon, n_trajectories, n_samples,
                  noise_std):
