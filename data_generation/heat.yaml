@@ -1,10 +1,10 @@
 dynamics:
   name: Heat
   args:
-    n: &n_value 100 # spatial discretization
+    n: 100 # spatial discretization
     alpha: 1 # [cm^2/s]
     input_locations: [[0, 21], [69, 91]] # locations of inputs on the rod [cm]
-    L: &L_value 100 # [cm] length of the rod
+    L: 100 # [cm] length of the rod
 sequence_generator:
   name: Product
   args:
