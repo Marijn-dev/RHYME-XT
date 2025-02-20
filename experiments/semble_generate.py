@@ -54,9 +54,6 @@ def get_postprocess(dynamics: str):
             ]
     return []
 
-def Spatial_input(data,settings):
-    print(settings["dynamics"]["name"])
-
 def rejection_sampling_single_neuro(data):
     for (k, y) in enumerate(data.state):
         p = y[:, 0].flatten()
