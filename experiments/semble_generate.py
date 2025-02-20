@@ -22,8 +22,7 @@ def main():
     # PHI is U of SVD of concatenated train_data trajectories
     train_data, val_data, test_data,PHI = generate(args,
                                                sampler,
-                                               postprocess=postprocess)
-
+                                               postprocess=postprocess) 
 
     data = {
         "train": train_data,
@@ -31,7 +30,8 @@ def main():
         "test": test_data,
         "settings": settings,
         "args": vars(args),
-        "PHI":PHI
+        "PHI":PHI,
+        "Locations:": sampler._dyn.locations,
     }
 
     output_dir = Path("./data/")
