@@ -22,7 +22,9 @@ hyperparams = {
     'decoder_size': 1,
     'decoder_depth': 2,
     'batch_size': 128,
-    'use_POD':True,
+    'use_POD':False,
+    'use_trunk':True,
+    'trunk_size':[60,60,60],
     'POD_modes':2,
     'lr': 0.001,
     'n_epochs': 1000,
@@ -84,6 +86,8 @@ def main():
         'decoder_size': wandb.config['decoder_size'],
         'decoder_depth': wandb.config['decoder_depth'],
         'use_POD': wandb.config['use_POD'],
+        'use_trunk': wandb.config['use_trunk'],
+        'trunk_size': wandb.config['trunk_size'],
         'POD_modes':wandb.config['POD_modes'],
         'use_batch_norm': False,
     }
@@ -134,10 +138,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, data['PHI'],loss, model, device)
-    val_loss = validate(val_dl, data['PHI'],loss, model, device)
-    test_loss = validate(test_dl,data['PHI'], loss, model,device)
-
+    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device)
+    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device)
+    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device)
 
     early_stop.step(val_loss)
     print(
@@ -150,12 +153,12 @@ def main():
     for epoch in range(wandb.config['n_epochs']):
         model.train()
         for example in train_dl:
-            train_step(example, data['PHI'],loss, model, optimiser, device)
+            train_step(example, data['PHI'],data['Locations'],loss, model, optimiser, device)
 
         model.eval()
-        train_loss = validate(train_dl,data['PHI'], loss, model, device)
-        val_loss = validate(val_dl, data['PHI'],loss, model, device)
-        test_loss = validate(test_dl, data['PHI'],loss, model, device)
+        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device)
+        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device)
+        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)

@@ -16,6 +16,8 @@ class CausalFlowModel(nn.Module):
                  decoder_size,
                  decoder_depth,
                  use_POD,
+                 use_trunk,
+                 trunk_size,
                  POD_modes,
                  use_batch_norm=False):
         super(CausalFlowModel, self).__init__()
@@ -27,11 +29,18 @@ class CausalFlowModel(nn.Module):
         self.control_rnn_size = control_rnn_size
 
         self.POD_enabled = use_POD
+        self.use_trunk = use_trunk
+        self.trunk_enabled = use_trunk
         self.POD_modes = POD_modes
+
         assert self.POD_modes <= self.state_dim,  'POD_modes too high'
 
         if self.POD_enabled:
             in_size_encoder,out_size_decoder,control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+
+        elif self.trunk_enabled:
+            in_size_encoder = state_dim
+            out_size_decoder = self.POD_modes
 
         else:
             in_size_encoder = state_dim
@@ -47,32 +56,40 @@ class CausalFlowModel(nn.Module):
 
         x_dnn_osz = control_rnn_depth * control_rnn_size
 
+        # Flow encoder
         self.x_dnn = FFNet(in_size=in_size_encoder,
                            out_size=x_dnn_osz,
                            hidden_size=encoder_depth *
-                           (encoder_size * x_dnn_osz, ), # hidden size is equal encoder depth (encoder_size*x_dnn_osz)
-                        # if encoder depth = 2 -> (encoder_size*x_dnn_osz, encoder_size*x_dnn_osz)
+                           (encoder_size * x_dnn_osz, ), 
                            use_batch_norm=use_batch_norm)
 
+        # Flow decoder
         u_dnn_isz = control_rnn_size
         self.u_dnn = FFNet(in_size=u_dnn_isz,
                            out_size=out_size_decoder,
                            hidden_size=decoder_depth *
                            (decoder_size * u_dnn_isz, ),
                            use_batch_norm=use_batch_norm)
-
-    def forward(self, x, rnn_input,PHI, deltas):
         
-        if self.POD_enabled: # project inputs to the models
-            x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
+        # Trunk network
+        if self.trunk_enabled:
+            self.trunk = TrunkNet(in_size=1,
+                            out_size=POD_modes,
+                            hidden_size=trunk_size,
+                            use_batch_norm=use_batch_norm)
 
+    def forward(self, x, rnn_input,PHI,locations, deltas):
+
+        # Project inputs to Flow model
+        if self.POD_enabled: 
+            x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
             deltas = unpadded_u[:, :, -1:]                                    # extract deltas
             u = unpadded_u[:, :, :-1]                                         # extract inputs values
             u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
             u_deltas = torch.cat((u_projected, deltas), dim=-1)  
             input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
-
+        
         else:
             x0 = x
             input = rnn_input
@@ -91,11 +108,27 @@ class CausalFlowModel(nn.Module):
         encoded_controls = (1 - deltas) * h_shift + deltas * h
         output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
-        if self.POD_enabled:
-            output = torch.einsum("ni,bi->bn",PHI[:,:self.POD_modes],output_flow)
+        
+        # Regular
+        if self.POD_enabled == False and self.trunk_enabled == False:
+            return output_flow
             
+
+        elif self.POD_enabled:
+            ## POD + Trunk
+            if self.trunk_enabled:
+                trunk_output =  self.trunk(locations.view(-1,1))
+                basis_functions = PHI[:,:self.POD_modes] + trunk_output 
+                
+            ## POD
+            else:
+                basis_functions = PHI[:,:self.POD_modes]
+
+        ## Trunk
         else:
-            output = output_flow
+            basis_functions = self.trunk(locations.view(-1,1))
+
+        output = torch.einsum("ni,bi->bn",basis_functions,output_flow)
         return output
 
 class CausalFlowModelV2(nn.Module):
@@ -185,6 +218,31 @@ class FFNet(nn.Module):
             if use_batch_norm:
                 self.layers.append(nn.BatchNorm1d(osz))
 
+            self.layers.append(activation())
+
+        self.layers.append(nn.Linear(hidden_size[-1], out_size))
+
+    def forward(self, input):
+        for layer in self.layers:
+            input = layer(input)
+        return input
+    
+class TrunkNet(nn.Module):
+
+    def __init__(self,
+                 in_size,
+                 out_size,
+                 hidden_size,
+                 activation=nn.Tanh,
+                 use_batch_norm=False):
+        super(TrunkNet, self).__init__()
+
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(in_size, hidden_size[0]))
+        self.layers.append(activation())
+
+        for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
+            self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
