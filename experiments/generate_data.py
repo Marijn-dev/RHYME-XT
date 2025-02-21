@@ -100,7 +100,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         trajectories.append(trajectory['state'])
 
     trajectories_conc = np.concatenate(trajectories,axis=0) # combine trajectories
-    PHI, _, _ = np.linalg.svd(np.transpose(trajectories_conc),full_matrices=False)
+    PHI, SIGMA, _ = np.linalg.svd(np.transpose(trajectories_conc),full_matrices=False)
     PHI = torch.from_numpy(PHI).type(torch.get_default_dtype())
 
     train_data = RawTrajectoryDataset(train_data,
@@ -129,7 +129,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             p(d)
 
     
-    return train_data, val_data, test_data, PHI
+    return train_data, val_data, test_data, PHI, SIGMA
 
 
 def make_trajectory_sampler(settings):
