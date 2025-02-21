@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+import numpy as np
 
 
 class CausalFlowModel(nn.Module):
@@ -17,6 +18,7 @@ class CausalFlowModel(nn.Module):
                  decoder_depth,
                  use_POD,
                  use_trunk,
+                 use_fourier,
                  trunk_size,
                  POD_modes,
                  use_batch_norm=False):
@@ -32,22 +34,38 @@ class CausalFlowModel(nn.Module):
         self.use_trunk = use_trunk
         self.trunk_enabled = use_trunk
         self.POD_modes = POD_modes
-
+        self.trunk_size = trunk_size
+        
+        self.fourier_enabled = use_fourier
         assert self.POD_modes <= self.state_dim,  'POD_modes too high'
 
         if self.POD_enabled:
-            in_size_encoder,out_size_decoder,control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+            self.in_size_encoder,self.out_size_decoder,self.control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+
 
         elif self.trunk_enabled:
-            in_size_encoder = state_dim
-            out_size_decoder = self.POD_modes
+            if self.fourier_enabled:
+                self.in_size_encoder = state_dim + 2
+                self.control_dim = control_dim + 2
 
+            else:
+                self.in_size_encoder = state_dim
+
+            self.out_size_decoder = self.POD_modes
+
+        # Fourier Net
+        elif self.fourier_enabled:
+            self.in_size_encoder = state_dim + 2
+            self.out_size_decoder = output_dim
+            self.control_dim = control_dim + 2
+
+        # regular flow
         else:
-            in_size_encoder = state_dim
-            out_size_decoder = output_dim
+            self.in_size_encoder = state_dim
+            self.out_size_decoder = output_dim
 
         self.u_rnn = torch.nn.LSTM(
-            input_size=1 + control_dim,
+            input_size=1 + self.control_dim,
             hidden_size=control_rnn_size,
             batch_first=True,
             num_layers=control_rnn_depth,
@@ -57,7 +75,7 @@ class CausalFlowModel(nn.Module):
         x_dnn_osz = control_rnn_depth * control_rnn_size
 
         # Flow encoder
-        self.x_dnn = FFNet(in_size=in_size_encoder,
+        self.x_dnn = FFNet(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,
                            hidden_size=encoder_depth *
                            (encoder_size * x_dnn_osz, ), 
@@ -66,7 +84,7 @@ class CausalFlowModel(nn.Module):
         # Flow decoder
         u_dnn_isz = control_rnn_size
         self.u_dnn = FFNet(in_size=u_dnn_isz,
-                           out_size=out_size_decoder,
+                           out_size=self.out_size_decoder,
                            hidden_size=decoder_depth *
                            (decoder_size * u_dnn_isz, ),
                            use_batch_norm=use_batch_norm)
@@ -74,18 +92,32 @@ class CausalFlowModel(nn.Module):
         # Trunk network
         if self.trunk_enabled:
             self.trunk = TrunkNet(in_size=1,
-                            out_size=POD_modes,
-                            hidden_size=trunk_size,
+                            out_size=self.POD_modes,
+                            hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,PHI,locations, deltas):
+        if self.fourier_enabled:
+            x_fft = torch.fft.rfft(x) 
+            x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
 
+            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+            deltas = unpadded_u[:, :, -1:]   
+            u = unpadded_u[:, :, :-1]                                         # extract inputs values
+
+            u_fft = torch.fft.rfft(u, dim=-1)  
+            u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1)  
+            u_deltas = torch.cat((u_fft, deltas), dim=-1)  
+            input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
+        
         # Project inputs to Flow model
-        if self.POD_enabled: 
+        elif self.POD_enabled: 
             x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
+
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
             deltas = unpadded_u[:, :, -1:]                                    # extract deltas
             u = unpadded_u[:, :, :-1]                                         # extract inputs values
+            
             u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
             u_deltas = torch.cat((u_projected, deltas), dim=-1)  
             input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
