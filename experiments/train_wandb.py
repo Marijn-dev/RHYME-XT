@@ -15,18 +15,18 @@ import time
 import wandb
 
 hyperparams = {
-    'control_rnn_size': 12,
+    'control_rnn_size': 128,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 2,
-    'decoder_size': 1,
-    'decoder_depth': 2,
+    'decoder_size': 2,
+    'decoder_depth': 3,
     'batch_size': 128,
     'use_POD':False,
-    'use_trunk':False,
-    'use_fourier':False,
+    'use_trunk':True,
+    'use_fourier':True,
     'trunk_size':[60,60,60],
-    'POD_modes':12,
+    'POD_modes':18,
     'lr': 0.001,
     'n_epochs': 1000,
     'es_patience': 20,
@@ -66,7 +66,7 @@ def main():
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
 
-    run = wandb.init(project='test', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='flumen_spatial', name=sys_args.name, config=hyperparams)
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
