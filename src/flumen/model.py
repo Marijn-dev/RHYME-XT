@@ -45,8 +45,8 @@ class CausalFlowModel(nn.Module):
 
         elif self.trunk_enabled:
             if self.fourier_enabled:
-                self.in_size_encoder = state_dim + 2
-                self.control_dim = control_dim + 2
+                self.in_size_encoder = (state_dim // 2 + 1) * 2
+                self.control_dim = (control_dim // 2 + 1) * 2
 
             else:
                 self.in_size_encoder = state_dim
@@ -55,9 +55,9 @@ class CausalFlowModel(nn.Module):
 
         # Fourier Net
         elif self.fourier_enabled:
-            self.in_size_encoder = state_dim + 2
+            self.in_size_encoder = (state_dim // 2 + 1) * 2
             self.out_size_decoder = output_dim
-            self.control_dim = control_dim + 2
+            self.control_dim = (control_dim // 2 + 1) * 2
 
         # regular flow
         else:
