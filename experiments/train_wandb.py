@@ -27,6 +27,7 @@ hyperparams = {
     'use_fourier':True,
     'trunk_size':[60,60,60],
     'POD_modes':18,
+    'fourier_modes':12,
     'lr': 0.001,
     'n_epochs': 1000,
     'es_patience': 20,
@@ -66,16 +67,14 @@ def main():
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
 
-    run = wandb.init(project='flumen_spatial', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='test', name=sys_args.name, config=hyperparams)
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    
     train_data = TrajectoryDataset(data["train"])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
-
     model_args = {
         'state_dim': train_data.state_dim,
         'control_dim': train_data.control_dim,
@@ -91,6 +90,7 @@ def main():
         'use_fourier':wandb.config['use_fourier'],
         'trunk_size': wandb.config['trunk_size'],
         'POD_modes':wandb.config['POD_modes'],
+        'fourier_modes':wandb.config['fourier_modes'],
         'use_batch_norm': False,
     }
 

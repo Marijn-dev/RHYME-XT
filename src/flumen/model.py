@@ -21,6 +21,7 @@ class CausalFlowModel(nn.Module):
                  use_fourier,
                  trunk_size,
                  POD_modes,
+                 fourier_modes,
                  use_batch_norm=False):
         super(CausalFlowModel, self).__init__()
 
@@ -34,10 +35,12 @@ class CausalFlowModel(nn.Module):
         self.use_trunk = use_trunk
         self.trunk_enabled = use_trunk
         self.POD_modes = POD_modes
+        self.fourier_modes = fourier_modes
         self.trunk_size = trunk_size
         
         self.fourier_enabled = use_fourier
         assert self.POD_modes <= self.state_dim,  'POD_modes too high'
+        assert self.fourier_modes <= self.state_dim // 2,  'fourier_modes too high'
 
         if self.POD_enabled:
             self.in_size_encoder,self.out_size_decoder,self.control_dim = self.POD_modes,self.POD_modes,self.POD_modes
@@ -45,8 +48,8 @@ class CausalFlowModel(nn.Module):
 
         elif self.trunk_enabled:
             if self.fourier_enabled:
-                self.in_size_encoder = (state_dim // 2 + 1) * 2
-                self.control_dim = (control_dim // 2 + 1) * 2
+                self.in_size_encoder = self.fourier_modes * 2
+                self.control_dim = self.fourier_modes * 2
 
             else:
                 self.in_size_encoder = state_dim
@@ -55,9 +58,9 @@ class CausalFlowModel(nn.Module):
 
         # Fourier Net
         elif self.fourier_enabled:
-            self.in_size_encoder = (state_dim // 2 + 1) * 2
+            self.in_size_encoder = self.fourier_modes * 2
             self.out_size_decoder = output_dim
-            self.control_dim = (control_dim // 2 + 1) * 2
+            self.control_dim = self.fourier_modes * 2
 
         # regular flow
         else:
@@ -95,18 +98,23 @@ class CausalFlowModel(nn.Module):
                             out_size=self.POD_modes,
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
+            
 
     def forward(self, x, rnn_input,PHI,locations, deltas):
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
+            x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
             x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
 
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
             deltas = unpadded_u[:, :, -1:]   
             u = unpadded_u[:, :, :-1]                                         # extract inputs values
 
+
             u_fft = torch.fft.rfft(u, dim=-1)  
-            u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1)  
+            u_fft = u_fft[:,:,:self.fourier_modes]
+            u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
+             
             u_deltas = torch.cat((u_fft, deltas), dim=-1)  
             input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
         
@@ -121,10 +129,11 @@ class CausalFlowModel(nn.Module):
             u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
             u_deltas = torch.cat((u_projected, deltas), dim=-1)  
             input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
-        
+
         else:
             x0 = x
             input = rnn_input
+
 
         h0 = self.x_dnn(x0)
         h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
