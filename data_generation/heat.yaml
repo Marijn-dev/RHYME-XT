@@ -10,12 +10,12 @@ sequence_generator:
   args:
     - name: UniformSqWave
       args:
-        period: 1
+        period: 2
         min: 0
         max: 3.0
     - name: UniformSqWave
       args:
-        period: 1
+        period: 2
         min: 0
         max: 3.0
 
