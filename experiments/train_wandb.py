@@ -23,8 +23,8 @@ hyperparams = {
     'decoder_depth': 3,
     'batch_size': 128,
     'use_POD':False,
-    'use_trunk':True,
-    'use_fourier':True,
+    'use_trunk':False,
+    'use_fourier':False,
     'trunk_size':[60,60,60],
     'POD_modes':18,
     'fourier_modes':12,
@@ -67,7 +67,7 @@ def main():
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
 
-    run = wandb.init(project='test', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='flumen_spatial', name=sys_args.name, config=hyperparams)
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
