@@ -39,7 +39,8 @@ class CausalFlowModel(nn.Module):
         self.trunk_size = trunk_size
         
         self.fourier_enabled = use_fourier
-        assert self.POD_modes <= self.state_dim,  'POD_modes too high'
+        if self.POD_enabled:
+            assert self.POD_modes <= self.state_dim,  'POD_modes too high'
         assert self.fourier_modes <= self.state_dim // 2,  'fourier_modes too high'
 
         if self.POD_enabled:
