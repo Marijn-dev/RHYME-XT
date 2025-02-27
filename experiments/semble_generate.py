@@ -1,5 +1,5 @@
 import torch
-
+import numpy as np
 torch.set_default_dtype(torch.float32)
 
 import pickle, yaml
@@ -24,7 +24,7 @@ def main():
                                                sampler,
                                                postprocess=postprocess) 
     
-    locations = torch.tensor(sampler._dyn.locations) if isinstance(sampler._dyn.locations, list) else None
+    locations = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) if isinstance(sampler._dyn.locations, np.ndarray) else None
    
     data = {
         "train": train_data,

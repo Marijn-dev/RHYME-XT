@@ -110,7 +110,6 @@ class CausalFlowModel(nn.Module):
             deltas = unpadded_u[:, :, -1:]   
             u = unpadded_u[:, :, :-1]                                         # extract inputs values
 
-
             u_fft = torch.fft.rfft(u, dim=-1)  
             u_fft = u_fft[:,:,:self.fourier_modes]
             u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1) 

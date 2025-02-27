@@ -55,13 +55,10 @@ class RawTrajectoryDataset(Dataset):
             
             # transform inputs
             if self.input_mask is not None:
-                control = sample['control'] @ self.input_mask.T
-                self.control_dim = control.shape[1]
-            else:
-                control = sample['control']
+                self.control_dim = sample['control'].shape[1]
 
             self.control_seq.append(
-                torch.from_numpy(control).type(
+                torch.from_numpy(sample['control']).type(
                     torch.get_default_dtype()).reshape((-1, self.control_dim)))
             
     @classmethod
