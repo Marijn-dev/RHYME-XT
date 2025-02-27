@@ -259,6 +259,7 @@ class FFNet(nn.Module):
                 self.layers.append(nn.BatchNorm1d(osz))
 
             self.layers.append(activation())
+            self.layers.append(nn.Dropout(0.2))  # Dropout layer
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
@@ -284,6 +285,8 @@ class TrunkNet(nn.Module):
         for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
             self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
+            self.layers.append(nn.Dropout(0.2))  # Dropout layer
+
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
