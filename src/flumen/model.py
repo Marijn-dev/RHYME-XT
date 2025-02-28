@@ -299,7 +299,7 @@ class DynamicPoolingCNN(nn.Module):
 
         self.input_dim = in_size
         self.output_dim = out_size
-        self.output_len = 25
+        self.output_len = 50
 
         # Convolutional layers
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, stride=1, padding=2)
