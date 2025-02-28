@@ -93,7 +93,7 @@ def main():
         'trunk_size': wandb.config['trunk_size'],
         'POD_modes':wandb.config['POD_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
-        'use_batch_norm': False,
+        'use_batch_norm': True,
     }
 
     model_metadata = {

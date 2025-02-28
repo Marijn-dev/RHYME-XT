@@ -23,7 +23,7 @@ class CausalFlowModel(nn.Module):
                  trunk_size,
                  POD_modes,
                  fourier_modes,
-                 use_batch_norm=False):
+                 use_batch_norm):
         super(CausalFlowModel, self).__init__()
 
         self.state_dim = state_dim
@@ -82,7 +82,7 @@ class CausalFlowModel(nn.Module):
         # Flow encoder (CNN)
         if self.conv_encoder_enabled:
             self.x_dnn = DynamicPoolingCNN(in_size=self.in_size_encoder,
-                           out_size=x_dnn_osz)
+                           out_size=x_dnn_osz,use_batch_norm=use_batch_norm)
             
         # Flow encoder (MLP)
         else:
@@ -107,7 +107,7 @@ class CausalFlowModel(nn.Module):
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
             
-
+    
     def forward(self, x, rnn_input,PHI,locations, deltas):
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
@@ -186,8 +186,8 @@ class FFNet(nn.Module):
                  in_size,
                  out_size,
                  hidden_size,
-                 activation=nn.Tanh,
-                 use_batch_norm=False):
+                 use_batch_norm,
+                 activation=nn.Tanh):
         super(FFNet, self).__init__()
 
         self.in_size = in_size
@@ -223,18 +223,24 @@ class TrunkNet(nn.Module):
                  in_size,
                  out_size,
                  hidden_size,
-                 activation=nn.Tanh,
-                 use_batch_norm=False):
+                 use_batch_norm,
+                 activation=nn.Tanh):
         super(TrunkNet, self).__init__()
 
         self.layers = nn.ModuleList()
         self.layers.append(nn.Linear(in_size, hidden_size[0]))
         self.layers.append(activation())
+        
+        if use_batch_norm:
+            self.layers.append(nn.BatchNorm1d(hidden_size[0]))
 
         for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
             self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
             self.layers.append(nn.Dropout(0.2))  # Dropout layer
+
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(hidden_size[osz]))
 
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
@@ -247,7 +253,8 @@ class TrunkNet(nn.Module):
 class CONV_Encoder(nn.Module):
     def __init__(self,
                  in_size,
-                 out_size):         
+                 out_size,
+                 use_batch_norm):         
         super(CONV_Encoder, self).__init__()
         self.in_size = in_size
         self.out_size = out_size
@@ -291,35 +298,41 @@ class CONV_Encoder(nn.Module):
 class DynamicPoolingCNN(nn.Module):
     def __init__(self,
                  in_size,
-                 out_size):
+                 out_size,
+                 use_batch_norm,
+                 activation=nn.ReLU):
         super(DynamicPoolingCNN, self).__init__()
 
-        self.activation = nn.ReLU()
-        self.dropout = nn.Dropout(p=0.2)
-
+        self.dropout = nn.Dropout(p=0.5)
         self.input_dim = in_size
         self.output_dim = out_size
         self.output_len = 50
 
-        # Convolutional layers
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2)
-        self.conv3 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=5, stride=1, padding=2)
-        
+        self.layers = nn.ModuleList()
+
+        conv_channels = [1,16,32,64,128]
+        for isz, osz in zip(conv_channels[:-1], conv_channels[1:]):
+            self.layers.append(nn.Conv1d(in_channels=isz, 
+                                         out_channels=osz, 
+                                         kernel_size=5, 
+                                         stride=1, 
+                                         padding=2))
+            
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(osz))
+
+            self.layers.append(activation())    
+
+        self.layers.append(self.dropout)
+
         # Fully connected layer for transforming to output size
-        self.fc = nn.Linear(128 * self.output_len, self.output_dim)
+        self.fc = nn.Linear(conv_channels[-1] * self.output_len, self.output_dim)
     
     def calculate_pooling_params(self, input_length, output_len):
         """ Calculate the kernel_size based on input size and desired output length """
         
         # Calculate kernel size based on input length and output length
-        kernel_size = input_length // output_len
-        
-        # Ensure kernel size is at least 1
-        if kernel_size < 1:
-            kernel_size = 1
-            stride = 1
-        
+        kernel_size = max(1, input_length // output_len)  # Ensure kernel size is at least 1
         return kernel_size
     
     def forward(self, input):
@@ -328,11 +341,9 @@ class DynamicPoolingCNN(nn.Module):
         input = input.unsqueeze(1)  # Assuming input has shape (batch_size, input_dim)
         input_dim = input.shape[2]
 
-        # Apply convolutions
-        input = self.activation(self.conv1(input))
-        input = self.activation(self.conv2(input))
-        input = self.activation(self.conv3(input))
-        input = self.dropout(input)
+        # convolutional layers
+        for layer in self.layers:
+            input = layer(input)
         
         # Apply dynamic pooling 
         self.kernel_size = self.calculate_pooling_params(input_dim, self.output_len)
@@ -341,6 +352,6 @@ class DynamicPoolingCNN(nn.Module):
         
         # Flatten the output from pooling layer and pass through fully connected layer
         input = input.view(input.size(0), -1)  # Flatten the tensor
-        output = self.fc(input)
+        input = self.fc(input)
         
-        return output
+        return input
