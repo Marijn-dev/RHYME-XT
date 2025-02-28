@@ -81,7 +81,7 @@ class CausalFlowModel(nn.Module):
 
         # Flow encoder (CNN)
         if self.conv_encoder_enabled:
-            self.x_dnn = CONV_Encoder(in_size=self.in_size_encoder,
+            self.x_dnn = DynamicPoolingCNN(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz)
             
         # Flow encoder (MLP)
@@ -288,3 +288,59 @@ class CONV_Encoder(nn.Module):
         return output
 
 
+class DynamicPoolingCNN(nn.Module):
+    def __init__(self,
+                 in_size,
+                 out_size):
+        super(DynamicPoolingCNN, self).__init__()
+
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.2)
+
+        self.input_dim = in_size
+        self.output_dim = out_size
+        self.output_len = 25
+
+        # Convolutional layers
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, stride=1, padding=2)
+        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2)
+        self.conv3 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=5, stride=1, padding=2)
+        
+        # Fully connected layer for transforming to output size
+        self.fc = nn.Linear(128 * self.output_len, self.output_dim)
+    
+    def calculate_pooling_params(self, input_length, output_len):
+        """ Calculate the kernel_size based on input size and desired output length """
+        
+        # Calculate kernel size based on input length and output length
+        kernel_size = input_length // output_len
+        
+        # Ensure kernel size is at least 1
+        if kernel_size < 1:
+            kernel_size = 1
+            stride = 1
+        
+        return kernel_size
+    
+    def forward(self, input):
+
+        # Reshape input to (batch_size, 1, input_dim) for CNN
+        input = input.unsqueeze(1)  # Assuming input has shape (batch_size, input_dim)
+        input_dim = input.shape[2]
+
+        # Apply convolutions
+        input = self.activation(self.conv1(input))
+        input = self.activation(self.conv2(input))
+        input = self.activation(self.conv3(input))
+        input = self.dropout(input)
+        
+        # Apply dynamic pooling 
+        self.kernel_size = self.calculate_pooling_params(input_dim, self.output_len)
+        pool = nn.AvgPool1d(kernel_size=self.kernel_size)
+        input = pool(input)
+        
+        # Flatten the output from pooling layer and pass through fully connected layer
+        input = input.view(input.size(0), -1)  # Flatten the tensor
+        output = self.fc(input)
+        
+        return output
