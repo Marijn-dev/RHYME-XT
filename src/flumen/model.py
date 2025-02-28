@@ -240,7 +240,7 @@ class TrunkNet(nn.Module):
             self.layers.append(nn.Dropout(0.2))  # Dropout layer
 
             if use_batch_norm:
-                self.layers.append(nn.BatchNorm1d(hidden_size[osz]))
+                self.layers.append(nn.BatchNorm1d(osz))
 
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
