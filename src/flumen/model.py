@@ -22,6 +22,7 @@ class CausalFlowModel(nn.Module):
                  use_conv_encoder,
                  trunk_size,
                  POD_modes,
+                 trunk_modes,
                  fourier_modes,
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
@@ -38,10 +39,13 @@ class CausalFlowModel(nn.Module):
         self.POD_modes = POD_modes
         self.fourier_modes = fourier_modes
         self.trunk_size = trunk_size
-        
+        self.trunk_modes = trunk_modes
         self.fourier_enabled = use_fourier
+        
         if self.POD_enabled:
+            self.trunk_modes = self.POD_modes
             assert self.POD_modes <= self.state_dim,  'POD_modes too high'
+
         assert self.fourier_modes <= self.state_dim // 2,  'fourier_modes too high'
 
         if self.POD_enabled:
@@ -56,7 +60,7 @@ class CausalFlowModel(nn.Module):
             else:
                 self.in_size_encoder = state_dim
 
-            self.out_size_decoder = self.POD_modes
+            self.out_size_decoder = self.trunk_modes
 
         # Fourier Net
         elif self.fourier_enabled:
@@ -103,11 +107,10 @@ class CausalFlowModel(nn.Module):
         # Trunk network
         if self.trunk_enabled:
             self.trunk = TrunkNet(in_size=1,
-                            out_size=self.POD_modes,
+                            out_size=self.trunk_modes,
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
-            
-    
+       
     def forward(self, x, rnn_input,PHI,locations, deltas):
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
