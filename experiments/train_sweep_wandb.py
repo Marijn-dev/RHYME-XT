@@ -231,7 +231,7 @@ if __name__ == '__main__':
         'batch_size': {'values': [64, 128, 256]},  # Batch size options
         'use_POD': {'values': [False, True]},  # Test POD usage
         'use_trunk': {'values': [True,False]},  # Trunk is always True in your case
-        'use_fourier': {'values': [False, True]},  # Fourier transform options
+        'use_fourier': {'values': [True]},  # Fourier transform options
         'use_conv_encoder': {'values': [True,False]},  # Assuming you don't use conv encoder in this case
         'trunk_size': {
             'values': [
