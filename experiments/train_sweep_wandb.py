@@ -251,7 +251,7 @@ if __name__ == '__main__':
         'es_delta': {'values': [1e-7, 1e-6]},  # Early stopping delta values
         'sched_patience': {'values': [5, 10]},  # Scheduler patience values
         'sched_factor': {'values': [1.5, 2]},  # Scheduler factor values
-        'loss': {'values': ['mse', 'l1']}  # Loss function options
+        'loss': {'values': ['mse']}  # Loss function options
         }
         }
     # Initialize sweep
