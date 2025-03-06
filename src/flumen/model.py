@@ -41,44 +41,29 @@ class CausalFlowModel(nn.Module):
         self.trunk_size = trunk_size
         self.trunk_modes = trunk_modes
         self.fourier_enabled = use_fourier
-        
+
         if self.POD_enabled:
+            assert self.POD_modes <= self.state_dim, "POD_modes too high"
             self.trunk_modes = self.POD_modes
-            if self.fourier_modes > self.POD_modes // 2:
-                self.fourier_modes = self.POD_modes // 2
-            assert self.POD_modes <= self.state_dim,  'POD_modes too high'
-
-        assert self.fourier_modes <= self.state_dim // 2,  'fourier_modes too high'
-
-        if self.POD_enabled:
-            if self.fourier_enabled:
-                self.in_size_encoder = self.fourier_modes * 2
-                self.out_size_decoder = self.POD_modes
-                self.control_dim = self.fourier_modes * 2
-            else:
-                self.in_size_encoder,self.out_size_decoder,self.control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+            self.fourier_modes = min(self.fourier_modes, self.POD_modes // 2)
 
 
-        elif self.trunk_enabled:
-            if self.fourier_enabled:
-                self.in_size_encoder = self.fourier_modes * 2
-                self.control_dim = self.fourier_modes * 2
+        if self.POD_enabled or self.trunk_enabled:
+            self.fourier_modes = min(self.fourier_modes, self.trunk_modes // 2)
+            self.in_size_encoder = self.control_dim = (
+                self.fourier_modes * 2 if self.fourier_enabled else self.POD_modes if self.POD_enabled else self.state_dim
+            )
+            self.out_size_decoder = self.POD_modes if self.POD_enabled else self.trunk_modes
 
-            else:
-                self.in_size_encoder = state_dim
-
-            self.out_size_decoder = self.trunk_modes
-
-        # Fourier Net
         elif self.fourier_enabled:
-            self.in_size_encoder = self.fourier_modes * 2
-            self.out_size_decoder = output_dim
-            self.control_dim = self.fourier_modes * 2
+            self.fourier_modes = min(self.fourier_modes, self.state_dim // 2)
+            self.in_size_encoder = self.control_dim = self.fourier_modes * 2
+            self.out_size_decoder = self.output_dim
 
-        # regular flow
-        else:
-            self.in_size_encoder = state_dim
-            self.out_size_decoder = output_dim
+        else:  # Regular flow
+            self.in_size_encoder = self.state_dim
+            self.out_size_decoder = self.output_dim
+
 
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + self.control_dim,
@@ -117,84 +102,61 @@ class CausalFlowModel(nn.Module):
                             out_size=self.trunk_modes,
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
-    
+            
+        self.projection = (self.POD_enabled or self.trunk_enabled)
+
 
     def forward(self, x, rnn_input,PHI,locations, deltas):
-        if self.fourier_enabled and self.POD_enabled == False:
+        unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+        u = unpadded_u[:, :, :-1]                                         # extract inputs values
+
+        # project inputs: initial condition and forcing function
+        if self.projection:
+            basis_functions = 0  
+            if self.POD_enabled:
+                basis_functions += PHI[:, :self.POD_modes]
+            if self.trunk_enabled:
+                basis_functions +=  self.trunk(locations.view(-1, 1))  
+
+            x = torch.einsum("ni,bn->bi",basis_functions,x) 
+            u = torch.einsum('ni,btn->bti',basis_functions,u) 
+           
+        if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
             x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
-            x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
-
-            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
-            deltas = unpadded_u[:, :, -1:]   
-            u = unpadded_u[:, :, :-1]                                         # extract inputs values
+            x = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag coefficients
 
             u_fft = torch.fft.rfft(u, dim=-1)  
             u_fft = u_fft[:,:,:self.fourier_modes]
-            u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
+            u = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
              
-            u_deltas = torch.cat((u_fft, deltas), dim=-1)  
-            input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
-        
-        # Project inputs to Flow model
-        elif self.POD_enabled: 
-            x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
-            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
-            deltas = unpadded_u[:, :, -1:]                                    # extract deltas
-            u = unpadded_u[:, :, :-1]                                         # extract inputs values    
-            u = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
-
-            if self.fourier_enabled == True:
-                x_fft = torch.fft.rfft(x0) 
-                x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
-                x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
-                u_fft = torch.fft.rfft(u, dim=-1)  
-                u_fft = u_fft[:,:,:self.fourier_modes]
-                u = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
-            
-            u_deltas = torch.cat((u, deltas), dim=-1)  
-            input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
-
-        else:
-            x0 = x
-            input = rnn_input
+        # repack input
+        u_deltas = torch.cat((u, deltas), dim=-1)          
+        rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
 
 
-        h0 = self.x_dnn(x0)
+        h0 = self.x_dnn(x)
         h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
         c0 = torch.zeros_like(h0)
 
-        rnn_out_seq_packed, _ = self.u_rnn(input, (h0, c0))
+        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
-
         h_shift = torch.roll(h, shifts=1, dims=1)
         h_shift[:, 0, :] = h0[-1]
-
         encoded_controls = (1 - deltas) * h_shift + deltas * h
+     
         output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
         
         # Regular
         if self.POD_enabled == False and self.trunk_enabled == False:
-            return output_flow
-            
-
-        elif self.POD_enabled:
-            ## POD + Trunk
-            if self.trunk_enabled:
-                trunk_output =  self.trunk(locations.view(-1,1))
-                basis_functions = PHI[:,:self.POD_modes] + trunk_output 
-                
-            ## POD
-            else:
-                basis_functions = PHI[:,:self.POD_modes]
-
-        ## Trunk
+            output = output_flow
+        
+        # Inner product
         else:
-            basis_functions = self.trunk(locations.view(-1,1))
-       
-        output = torch.einsum("nj,bj->bn",basis_functions,output_flow)
+            output = torch.einsum("ni,bi->bn",basis_functions,output_flow)
+
         return output
 
 ## MLP
