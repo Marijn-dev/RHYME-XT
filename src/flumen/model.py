@@ -44,12 +44,19 @@ class CausalFlowModel(nn.Module):
         
         if self.POD_enabled:
             self.trunk_modes = self.POD_modes
+            if self.fourier_modes > self.POD_modes // 2:
+                self.fourier_modes = self.POD_modes // 2
             assert self.POD_modes <= self.state_dim,  'POD_modes too high'
 
         assert self.fourier_modes <= self.state_dim // 2,  'fourier_modes too high'
 
         if self.POD_enabled:
-            self.in_size_encoder,self.out_size_decoder,self.control_dim = self.POD_modes,self.POD_modes,self.POD_modes
+            if self.fourier_enabled:
+                self.in_size_encoder = self.fourier_modes * 2
+                self.out_size_decoder = self.POD_modes
+                self.control_dim = self.fourier_modes * 2
+            else:
+                self.in_size_encoder,self.out_size_decoder,self.control_dim = self.POD_modes,self.POD_modes,self.POD_modes
 
 
         elif self.trunk_enabled:
@@ -110,9 +117,10 @@ class CausalFlowModel(nn.Module):
                             out_size=self.trunk_modes,
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
-       
+    
+
     def forward(self, x, rnn_input,PHI,locations, deltas):
-        if self.fourier_enabled:
+        if self.fourier_enabled and self.POD_enabled == False:
             x_fft = torch.fft.rfft(x) 
             x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
             x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
@@ -130,15 +138,29 @@ class CausalFlowModel(nn.Module):
         
         # Project inputs to Flow model
         elif self.POD_enabled: 
-            x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
+            if self.fourier_enabled == True:
+                x0 = torch.einsum("ni,bn->bi",PHI[:,:self.POD_modes],x) 
+                x_fft = torch.fft.rfft(x0) 
+                x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
+                x0 = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag
+                unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+                deltas = unpadded_u[:, :, -1:]                                    # extract deltas
+                u = unpadded_u[:, :, :-1]   
+                u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
+                u_fft = torch.fft.rfft(u_projected, dim=-1)  
+                u_fft = u_fft[:,:,:self.fourier_modes]
+                u_fft = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
+                u_deltas = torch.cat((u_fft, deltas), dim=-1)  
+                input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
 
-            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
-            deltas = unpadded_u[:, :, -1:]                                    # extract deltas
-            u = unpadded_u[:, :, :-1]                                         # extract inputs values
-            
-            u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
-            u_deltas = torch.cat((u_projected, deltas), dim=-1)  
-            input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
+            else:
+                unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+                deltas = unpadded_u[:, :, -1:]                                    # extract deltas
+                u = unpadded_u[:, :, :-1]                                         # extract inputs values
+                
+                u_projected = torch.einsum('ni,btn->bti',PHI[:,:self.POD_modes],u) # project inputs
+                u_deltas = torch.cat((u_projected, deltas), dim=-1)  
+                input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
 
         else:
             x0 = x
@@ -178,8 +200,12 @@ class CausalFlowModel(nn.Module):
         ## Trunk
         else:
             basis_functions = self.trunk(locations.view(-1,1))
-
-        output = torch.einsum("ni,bi->bn",basis_functions,output_flow)
+        print(basis_functions.shape)
+        print(output_flow.shape)
+        print(x0.shape)
+        output = torch.einsum("nj,bj->bn",basis_functions,output_flow)
+        print(output.shape)
+        return
         return output
 
 ## MLP
