@@ -70,9 +70,9 @@ def train_main():
     run = wandb.init(project='flumen_spatial_sweep_v2_pr', name=sys_args.name, config=wandb.config)
 
     ## if conv is on, POD and fourier cant be on
-    if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
-        print("invalid combination, skip run")
-        return
+    # if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
+    #     print("invalid combination, skip run")
+    #     return
     
     with data_path.open('rb') as f:
         data = pickle.load(f)
