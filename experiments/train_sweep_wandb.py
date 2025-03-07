@@ -67,7 +67,7 @@ def train_main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_sweep_regular', name=sys_args.name, config=wandb.config)
+    run = wandb.init(project='flumen_spatial_sweep_v2_pr', name=sys_args.name, config=wandb.config)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
@@ -222,17 +222,17 @@ if __name__ == '__main__':
     'name': 'rnn_sweep_example',
     'metric': {'name': 'val_loss', 'goal': 'minimize'},
     'parameters': {
-        'control_rnn_size': {'values': [64, 128]},  # Example values for control_rnn_size
-        'control_rnn_depth': {'values': [1,2, 3]},  # Control the depth of the RNN
-        'encoder_size': {'values': [1, 2]},  # Encoder size (adjust accordingly)
+        'control_rnn_size': {'values': [64, 128,256]},  # Example values for control_rnn_size
+        'control_rnn_depth': {'values': [1,2, 3,4]},  # Control the depth of the RNN
+        'encoder_size': {'values': [1, 2,3,4]},  # Encoder size (adjust accordingly)
         'encoder_depth': {'values': [1, 2,3,4]},  # Encoder depth options
-        'decoder_size': {'values': [1, 2]},  # Decoder size (adjust accordingly)
+        'decoder_size': {'values': [1, 2,3,4]},  # Decoder size (adjust accordingly)
         'decoder_depth': {'values': [1, 2, 3,4]},  # Decoder depth options
         'batch_size': {'values': [64, 128, 256]},  # Batch size options
-        'use_POD': {'values': [False]},  # Test POD usage
-        'use_trunk': {'values': [False]},  # Trunk is always True in your case
-        'use_fourier': {'values': [False]},  # Fourier transform options
-        'use_conv_encoder': {'values': [False]},  # Assuming you don't use conv encoder in this case
+        'use_POD': {'values': [True,False]},  # Test POD usage
+        'use_trunk': {'values': [True,False]},  # Trunk is always True in your case
+        'use_fourier': {'values': [True,False]},  # Fourier transform options
+        'use_conv_encoder': {'values': [True,False]},  # Assuming you don't use conv encoder in this case
         'trunk_size': {
             'values': [
                 [100, 100, 100],  # Trunk size with 3 elements, all 100
@@ -251,13 +251,13 @@ if __name__ == '__main__':
         'es_delta': {'values': [1e-7, 1e-6]},  # Early stopping delta values
         'sched_patience': {'values': [5, 10]},  # Scheduler patience values
         'sched_factor': {'values': [1.5, 2]},  # Scheduler factor values
-        'loss': {'values': ['mse']}  # Loss function options
+        'loss': {'values': ['mse','l1']}  # Loss function options
         }
         }
     # Initialize sweep
     # Set the environment variable to disable flapping
     import os
     os.environ["WANDB_AGENT_DISABLE_FLAPPING"] = "True"
-    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_regular")
+    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_v2_pr")
     # Step 5: Start the Sweep Agent
     wandb.agent(sweep_id, function=train_main)
