@@ -229,10 +229,10 @@ if __name__ == '__main__':
         'decoder_size': {'values': [1, 2]},  # Decoder size (adjust accordingly)
         'decoder_depth': {'values': [2, 4, 6,8]},  # Decoder depth options
         'batch_size': {'values': [64, 128, 256]},  # Batch size options
-        'use_POD': {'values': [False, True]},  # Test POD usage
+        'use_POD': {'values': [True]},  # Test POD usage
         'use_trunk': {'values': [True,False]},  # Trunk is always True in your case
-        'use_fourier': {'values': [True]},  # Fourier transform options
-        'use_conv_encoder': {'values': [True,False]},  # Assuming you don't use conv encoder in this case
+        'use_fourier': {'values': [False]},  # Fourier transform options
+        'use_conv_encoder': {'values': [True]},  # Assuming you don't use conv encoder in this case
         'trunk_size': {
             'values': [
                 [100, 100, 100],  # Trunk size with 3 elements, all 100
@@ -242,7 +242,7 @@ if __name__ == '__main__':
                 [100, 100]         # Trunk size with 2 elements, smaller values
             ]
         },  # Different trunk size lengths and depth combinations
-        'POD_modes': {'values': [1, 10,25,50]},  # POD modes options
+        'POD_modes': {'values': [50]},  # POD modes options
         'trunk_modes': {'values': [5,50,100,250,500]},  # POD modes options
         'fourier_modes': {'values': [8, 12, 16,24]},  # Fourier modes options
         'lr': {'max': 0.01, 'min': 1e-5},  # Learning rate range for optimization
