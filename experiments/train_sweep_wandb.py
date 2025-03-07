@@ -67,7 +67,7 @@ def train_main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_sweep_projecttrunk', name=sys_args.name, config=wandb.config)
+    run = wandb.init(project='flumen_spatial_sweep_projecttrunk_CONV', name=sys_args.name, config=wandb.config)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
@@ -232,7 +232,7 @@ if __name__ == '__main__':
         'use_POD': {'values': [True]},  # Test POD usage
         'use_trunk': {'values': [True]},  # Trunk is always True in your case
         'use_fourier': {'values': [False]},  # Fourier transform options
-        'use_conv_encoder': {'values': [False]},  # Assuming you don't use conv encoder in this case
+        'use_conv_encoder': {'values': [True]},  # Assuming you don't use conv encoder in this case
         'trunk_size': {
             'values': [
                 [100, 100, 100],  # Trunk size with 3 elements, all 100
@@ -242,7 +242,7 @@ if __name__ == '__main__':
                 [100, 100]         # Trunk size with 2 elements, smaller values
             ]
         },  # Different trunk size lengths and depth combinations
-        'POD_modes': {'values': [1, 10,25,50]},  # POD modes options
+        'POD_modes': {'values': [50]},  # POD modes options
         'trunk_modes': {'values': [5,50,100,250,500]},  # POD modes options
         'fourier_modes': {'values': [8, 24,100,200]},  # Fourier modes options
         'lr': {'max': 0.01, 'min': 1e-5},  # Learning rate range for optimization
@@ -258,6 +258,6 @@ if __name__ == '__main__':
     # Set the environment variable to disable flapping
     import os
     os.environ["WANDB_AGENT_DISABLE_FLAPPING"] = "True"
-    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_projecttrunk")
+    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_projecttrunk_CONV")
     # Step 5: Start the Sweep Agent
     wandb.agent(sweep_id, function=train_main)
