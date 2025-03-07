@@ -244,7 +244,7 @@ if __name__ == '__main__':
         },  # Different trunk size lengths and depth combinations
         'POD_modes': {'values': [1, 10,25,50]},  # POD modes options
         'trunk_modes': {'values': [5,50,100,250,500]},  # POD modes options
-        'fourier_modes': {'values': [8, 12, 16,24]},  # Fourier modes options
+        'fourier_modes': {'values': [8, 24,100,200]},  # Fourier modes options
         'lr': {'max': 0.01, 'min': 1e-5},  # Learning rate range for optimization
         'n_epochs': {'values': [500, 1000]},  # Epoch values to try
         'es_patience': {'values': [10, 20]},  # Early stopping patience
