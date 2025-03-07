@@ -229,9 +229,9 @@ if __name__ == '__main__':
         'decoder_size': {'values': [1, 2]},  # Decoder size (adjust accordingly)
         'decoder_depth': {'values': [2, 4, 6,8]},  # Decoder depth options
         'batch_size': {'values': [64, 128, 256]},  # Batch size options
-        'use_POD': {'values': [False, True]},  # Test POD usage
+        'use_POD': {'values': [True]},  # Test POD usage
         'use_trunk': {'values': [True]},  # Trunk is always True in your case
-        'use_fourier': {'values': [True,False]},  # Fourier transform options
+        'use_fourier': {'values': [False]},  # Fourier transform options
         'use_conv_encoder': {'values': [False]},  # Assuming you don't use conv encoder in this case
         'trunk_size': {
             'values': [
