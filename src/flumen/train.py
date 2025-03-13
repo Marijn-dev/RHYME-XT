@@ -3,7 +3,7 @@ import torch
 
 def prep_inputs(x0, y, u, lengths, device):
     sort_idxs = torch.argsort(lengths, descending=True)
-
+    y = torch.log(y)
     x0 = x0[sort_idxs]
     y = y[sort_idxs]
     u = u[sort_idxs]
