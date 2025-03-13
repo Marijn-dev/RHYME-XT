@@ -14,31 +14,6 @@ import time
 
 import wandb
 
-# hyperparams = {
-#     'control_rnn_size': 128,
-#     'control_rnn_depth': 4,
-#     'encoder_size': 1,
-#     'encoder_depth': 3,
-#     'decoder_size': 1,
-#     'decoder_depth': 7,
-#     'batch_size': 128,
-#     'use_POD':False,
-#     'use_trunk':True,
-#     'use_fourier':False,
-#     'use_conv_encoder':False,
-#     'trunk_size':[100,100,100,100,100],
-#     'POD_modes':100,
-#     'fourier_modes':12,
-#     'lr': 0.001,
-#     'n_epochs': 1000,
-#     'es_patience': 20,
-#     'es_delta': 1e-7,
-#     'sched_patience': 10,
-#     'sched_factor': 2,
-#     'loss': "mse",
-# }
-
-
 def get_loss(which):
     if which == "mse":
         return torch.nn.MSELoss()
@@ -67,12 +42,12 @@ def train_main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_sweep_v2_pr', name=sys_args.name, config=wandb.config)
+    run = wandb.init(project='flumen_spatial_sweep_v3', name=sys_args.name, config=wandb.config)
 
-    ## if conv is on, POD and fourier cant be on
-    # if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
-    #     print("invalid combination, skip run")
-    #     return
+    # if conv is on, POD and fourier cant be on
+    if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
+        print("invalid combination, skip run")
+        return
     
     with data_path.open('rb') as f:
         data = pickle.load(f)
@@ -92,6 +67,7 @@ def train_main():
         'decoder_depth': wandb.config['decoder_depth'],
         'use_POD': wandb.config['use_POD'],
         'use_trunk': wandb.config['use_trunk'],
+        'use_petrov_galerkin': wandb.config['use_petrov_galerkin'],
         'use_fourier':wandb.config['use_fourier'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],
@@ -101,6 +77,8 @@ def train_main():
         'use_batch_norm': True,
     }
     run_id = ""
+    run_id += f"Petrov_galerkin_{model_args['use_petrov_galerkin']}_"
+
     if model_args['use_fourier']:
         run_id += f"Fourier_Modes_{model_args['fourier_modes']}_" 
     if model_args['use_trunk']: 
@@ -222,42 +200,43 @@ if __name__ == '__main__':
     'name': 'rnn_sweep_example',
     'metric': {'name': 'val_loss', 'goal': 'minimize'},
     'parameters': {
-        'control_rnn_size': {'values': [64, 128,256]},  # Example values for control_rnn_size
-        'control_rnn_depth': {'values': [1,2, 3,4]},  # Control the depth of the RNN
-        'encoder_size': {'values': [1, 2,3,4]},  # Encoder size (adjust accordingly)
-        'encoder_depth': {'values': [1, 2,3,4]},  # Encoder depth options
-        'decoder_size': {'values': [1, 2,3,4]},  # Decoder size (adjust accordingly)
-        'decoder_depth': {'values': [1, 2, 3,4]},  # Decoder depth options
-        'batch_size': {'values': [64, 128, 256]},  # Batch size options
-        'use_POD': {'values': [True,False]},  # Test POD usage
-        'use_trunk': {'values': [True,False]},  # Trunk is always True in your case
-        'use_fourier': {'values': [True,False]},  # Fourier transform options
-        'use_conv_encoder': {'values': [True,False]},  # Assuming you don't use conv encoder in this case
+        'control_rnn_size': {'values': [64, 128,256]}, 
+        'control_rnn_depth': {'values': [1,2, 3,4]}, 
+        'encoder_size': {'values': [1, 2,3,4]},  
+        'encoder_depth': {'values': [1, 2,3,4]}, 
+        'decoder_size': {'values': [1, 2,3,4]},  
+        'decoder_depth': {'values': [1, 2, 3,4]}, 
+        'batch_size': {'values': [64, 128, 256]}, 
+        'use_POD': {'values': [True,False]},  
+        'use_trunk': {'values': [True,False]},  
+        'use_petrov_galerkin': {'values': [True,False]}, 
+        'use_fourier': {'values': [True,False]}, 
+        'use_conv_encoder': {'values': [True,False]}, 
         'trunk_size': {
             'values': [
-                [100, 100, 100],  # Trunk size with 3 elements, all 100
-                [100, 100, 100,100],   # Trunk size with 3 elements, varying depths
-                [150, 150,150],       # Trunk size with 2 elements, both 150
-                [250, 250,250],       # Trunk size with 2 elements, different values
-                [100, 100]         # Trunk size with 2 elements, smaller values
+                [100, 100, 100],  
+                [100, 100, 100,100],   
+                [150, 150,150],      
+                [250, 250,250],      
+                [100, 100]         
             ]
-        },  # Different trunk size lengths and depth combinations
-        'POD_modes': {'values': [50]},  # POD modes options
-        'trunk_modes': {'values': [5,50,100,250,500]},  # POD modes options
-        'fourier_modes': {'values': [8, 24,100,200]},  # Fourier modes options
-        'lr': {'max': 0.01, 'min': 1e-5},  # Learning rate range for optimization
-        'n_epochs': {'values': [500, 1000]},  # Epoch values to try
-        'es_patience': {'values': [10, 20]},  # Early stopping patience
-        'es_delta': {'values': [1e-7, 1e-6]},  # Early stopping delta values
-        'sched_patience': {'values': [5, 10]},  # Scheduler patience values
-        'sched_factor': {'values': [1.5, 2]},  # Scheduler factor values
-        'loss': {'values': ['mse','l1']}  # Loss function options
+        },  
+        'POD_modes': {'values': [50]},  
+        'trunk_modes': {'values': [5,50,100,250,500]},  
+        'fourier_modes': {'values': [8, 24,100,200]}, 
+        'lr': {'max': 0.01, 'min': 1e-5},  
+        'n_epochs': {'values': [500, 1000]},  
+        'es_patience': {'values': [10, 20]},  
+        'es_delta': {'values': [1e-7, 1e-6]},  
+        'sched_patience': {'values': [5, 10]},  
+        'sched_factor': {'values': [1.5, 2]}, 
+        'loss': {'values': ['mse','l1']}  
         }
         }
     # Initialize sweep
     # Set the environment variable to disable flapping
     import os
     os.environ["WANDB_AGENT_DISABLE_FLAPPING"] = "True"
-    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_v2_pr")
+    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_v3")
     # Step 5: Start the Sweep Agent
     wandb.agent(sweep_id, function=train_main)
