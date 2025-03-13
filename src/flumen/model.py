@@ -18,6 +18,7 @@ class CausalFlowModel(nn.Module):
                  decoder_depth,
                  use_POD,
                  use_trunk,
+                 use_petrov_galerkin,
                  use_fourier,
                  use_conv_encoder,
                  trunk_size,
@@ -30,39 +31,58 @@ class CausalFlowModel(nn.Module):
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.output_dim = output_dim
-        
         self.control_rnn_size = control_rnn_size
+        self.basis_function_modes = self.state_dim
 
         self.POD_enabled = use_POD
-        self.trunk_enabled = use_trunk
-        self.conv_encoder_enabled = use_conv_encoder
         self.POD_modes = POD_modes
-        self.fourier_modes = fourier_modes
-        self.trunk_size = trunk_size
+        
+        self.trunk_enabled = use_trunk
         self.trunk_modes = trunk_modes
+        self.trunk_size = trunk_size
+
         self.fourier_enabled = use_fourier
+        self.fourier_modes = fourier_modes
+
+        self.conv_encoder_enabled = use_conv_encoder
+
+        self.petrov_galerkin_enabled = use_petrov_galerkin # whether to use galerkin or standard galerkin
+        self.projection = (self.POD_enabled or self.trunk_enabled) and self.petrov_galerkin_enabled == False
 
         if self.POD_enabled:
-            assert self.POD_modes <= self.state_dim, "POD_modes too high"
-            self.trunk_modes = self.POD_modes
-            self.fourier_modes = min(self.fourier_modes, self.POD_modes // 2)
+            self.POD_modes = min(self.POD_modes,self.state_dim) # cant be higher than state dimension
+            self.basis_function_modes = self.POD_modes  
+            self.out_size_decoder = self.basis_function_modes
 
+            # petrov galerkin -> use different basis functions for branch and trunk
+            if self.petrov_galerkin_enabled:
+                self.in_size_encoder = self.control_dim = self.state_dim
+            
+            # standard galerkin -> same basis functions for branch and trunk
+            else:
+                self.in_size_encoder = self.control_dim = self.basis_function_modes
 
-        if self.POD_enabled or self.trunk_enabled:
-            self.fourier_modes = min(self.fourier_modes, self.trunk_modes // 2)
-            self.in_size_encoder = self.control_dim = (
-                self.fourier_modes * 2 if self.fourier_enabled else self.POD_modes if self.POD_enabled else self.state_dim
-            )
-            self.out_size_decoder = self.POD_modes if self.POD_enabled else self.trunk_modes
+        elif self.trunk_enabled:
+            self.basis_function_modes = self.trunk_modes  
+            self.out_size_decoder = self.basis_function_modes
 
-        elif self.fourier_enabled:
-            self.fourier_modes = min(self.fourier_modes, self.state_dim // 2)
+            # petrov galerkin -> use different basis functions for branch and trunk
+            if self.petrov_galerkin_enabled:
+                self.in_size_encoder = self.control_dim = self.state_dim
+
+            # standard galerkin -> same basis functions for branch and trunk
+            else:
+                self.in_size_encoder = self.control_dim = self.basis_function_modes
+                
+
+        else:
+            self.in_size_encoder = self.control_dim = self.state_dim
+            self.out_size_decoder = self.output_dim
+            
+
+        if self.fourier_enabled:
+            self.fourier_modes = min(self.fourier_modes, self.basis_function_modes // 2)
             self.in_size_encoder = self.control_dim = self.fourier_modes * 2
-            self.out_size_decoder = self.output_dim
-
-        else:  # Regular flow
-            self.in_size_encoder = self.state_dim
-            self.out_size_decoder = self.output_dim
 
 
         self.u_rnn = torch.nn.LSTM(
@@ -99,28 +119,31 @@ class CausalFlowModel(nn.Module):
         # Trunk network
         if self.trunk_enabled:
             self.trunk = TrunkNet(in_size=1,
-                            out_size=self.trunk_modes,
+                            out_size=self.basis_function_modes,
                             hidden_size=self.trunk_size,
                             use_batch_norm=use_batch_norm)
             
-        self.projection = (self.POD_enabled or self.trunk_enabled)
 
 
     def forward(self, x, rnn_input,PHI,locations, deltas):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
         u = unpadded_u[:, :, :-1]                                         # extract inputs values
 
-        # project inputs: initial condition and forcing function
-        if self.projection:
-            basis_functions = 0  
-            if self.POD_enabled:
-                basis_functions += PHI[:, :self.POD_modes]
-            if self.trunk_enabled:
-                basis_functions +=  self.trunk(locations.view(-1, 1))  
+        basis_functions = 0
 
+        # POD basis functions
+        if self.POD_enabled:
+            basis_functions += PHI[:, :self.basis_function_modes]
+
+        # Trunk MLP basis functions
+        if self.trunk_enabled:
+            basis_functions +=  self.trunk(locations.view(-1, 1))  
+
+        # if normal galerking -> project the inputs
+        if self.projection:
             x = torch.einsum("ni,bn->bi",basis_functions,x) 
             u = torch.einsum('ni,btn->bti',basis_functions,u) 
-           
+
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
             x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
@@ -229,50 +252,6 @@ class TrunkNet(nn.Module):
         for layer in self.layers:
             input = layer(input)
         return input
-
-class CONV_Encoder(nn.Module):
-    def __init__(self,
-                 in_size,
-                 out_size,
-                 use_batch_norm):         
-        super(CONV_Encoder, self).__init__()
-        self.in_size = in_size
-        self.out_size = out_size
-        self.relu = nn.ReLU() 
-
-        # 1D Convolutional layers
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=64, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=5, stride=1, padding=2)
-        self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=5, stride=1, padding=2)
-        
-        # Windowed Average Pooling (WAP)
-        self.pool_wap1 = nn.AvgPool1d(kernel_size=5, stride=2, padding=2)  # Reduces length by 2x
-        self.pool_wap2 = nn.AvgPool1d(kernel_size=5, stride=2, padding=2)  # Further reduction
-        
-        # Final Global Average Pooling (All-AP)
-        self.global_pool = nn.AdaptiveAvgPool1d(1)  # Collapses spatial dimension
-
-        # Fully connected layer, get correct dimension
-        self.fc = nn.Linear(256, out_size)
-
-    def forward(self, input):
-
-        input = input.unsqueeze(1)  # (batch_size, input_dim) -> (batch_size, 1, input_dim)
-
-        input = self.relu(self.conv1(input))
-        input = self.pool_wap1(input)  
-
-        input = self.relu(self.conv2(input))
-        input = self.pool_wap2(input)
-
-        input = self.relu(self.conv3(input))
-
-        input = self.global_pool(input)  # Output shape: (batch_size, 256, 1)
-        
-        input = input.view(input.size(0), -1)  # (batch_size, 256)
-        output = self.fc(input)
-        
-        return output
 
 
 class DynamicPoolingCNN(nn.Module):
