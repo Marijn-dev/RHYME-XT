@@ -15,27 +15,29 @@ import time
 import wandb
 
 hyperparams = {
-    'control_rnn_size': 128,
+    'control_rnn_size': 64,
     'control_rnn_depth': 1,
-    'encoder_size': 1,
-    'encoder_depth': 3,
-    'decoder_size': 1,
-    'decoder_depth': 3,
-    'batch_size': 128,
-    'use_POD':False,
+    'encoder_size': 2,
+    'encoder_depth': 2,
+    'decoder_size': 2,
+    'decoder_depth': 1,
+    'batch_size': 256,
+    'use_POD':True,
     'use_trunk':False,
+    'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'use_fourier':False,
     'use_conv_encoder':True,
-    'trunk_size':[60,60,60],
-    'POD_modes':18,
-    'fourier_modes':12,
-    'lr': 0.001,
+    'trunk_size':[100,100,100,100,100],
+    'POD_modes':50,
+    'trunk_modes':500,   
+    'fourier_modes':50,
+    'lr': 0.0015,
     'n_epochs': 1000,
     'es_patience': 20,
     'es_delta': 1e-7,
-    'sched_patience': 10,
+    'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "mse",
+    'loss': "l1",
 }
 
 
@@ -67,9 +69,13 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
+    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
 
-    run = wandb.init(project='flumen_spatial', name=sys_args.name, config=hyperparams)
-
+    ## if conv is on, POD and fourier cant be on
+    if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
+        print("invalid combination, skip run")
+        return
+    
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
@@ -88,13 +94,28 @@ def main():
         'decoder_depth': wandb.config['decoder_depth'],
         'use_POD': wandb.config['use_POD'],
         'use_trunk': wandb.config['use_trunk'],
+        'use_petrov_galerkin': wandb.config['use_petrov_galerkin'],
         'use_fourier':wandb.config['use_fourier'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],
         'POD_modes':wandb.config['POD_modes'],
+        'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
         'use_batch_norm': True,
     }
+
+    run_id = ""
+    run_id += f"Petrov_galerkin_{model_args['use_petrov_galerkin']}_"
+    if model_args['use_fourier']:
+        run_id += f"Fourier_Modes_{model_args['fourier_modes']}_" 
+    if model_args['use_trunk']: 
+        run_id += f"Trunk_Modes_{model_args['trunk_modes']}_" 
+    if model_args['use_POD']: 
+        run_id += f"POD_Modes_{model_args['POD_modes']}_" 
+    if model_args['use_conv_encoder']: 
+        run_id += f"CONV"     
+    if model_args['use_POD'] == False and model_args['use_fourier'] == False and model_args['use_trunk'] == False and model_args['use_conv_encoder']:  
+        run_id += "Regular"  
 
     model_metadata = {
         'args': model_args,
@@ -102,11 +123,11 @@ def main():
         'data_settings': data["settings"],
         'data_args': data["args"]
     }
-    model_name = f"flow_model-{data_path.stem}-{sys_args.name}-{run.id}"
+    model_name = f"flow_model-{data_path.stem}-{sys_args.name}-{run_id}"
 
     # Prepare for saving the model
     model_save_dir = Path(
-        f"./outputs/{sys_args.name}/{sys_args.name}_{run.id}")
+        f"./outputs/{sys_args.name}/{sys_args.name}_{run_id}")
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Save local copy of metadata
@@ -200,5 +221,5 @@ def main():
 
 
 if __name__ == '__main__':
-    print_gpu_info()
     main()
+   
