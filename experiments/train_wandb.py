@@ -33,7 +33,7 @@ hyperparams = {
     'trunk_modes':500,   
     'fourier_modes':50,
     'lr': 0.0015,
-    'n_epochs': 10,
+    'n_epochs': 1000,
     'es_patience': 20,
     'es_delta': 1e-7,
     'sched_patience': 5,
