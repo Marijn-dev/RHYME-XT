@@ -8,7 +8,6 @@ from flumen import RawTrajectoryDataset
 import torch
 import numpy as np
 
-
 def percentage(value):
     value = int(value)
 
@@ -80,6 +79,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
                                                      args.n_samples)
         
         u = u @ trajectory_sampler._dyn.input_mask.T # only works if dynamics has input mask
+
         return {
             "init_state": x0,
             "time": t,
@@ -128,6 +128,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     for d in (train_data, val_data, test_data):
         for p in postprocess:
             p(d)
+    
 
     
     return train_data, val_data, test_data, PHI, SIGMA
