@@ -37,15 +37,25 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1",
+    'loss': "l1_relative",
 }
 
+
+def L1_relative(y_true, y_pred):
+
+    abs_error = torch.abs(y_true - y_pred)
+    variance = torch.mean((y_true - torch.mean(y_true))**2)    
+    relative_error = torch.mean(abs_error) / torch.sqrt(variance)
+    
+    return relative_error
 
 def get_loss(which):
     if which == "mse":
         return torch.nn.MSELoss()
     elif which == "l1":
         return torch.nn.L1Loss()
+    elif which == "l1_relative":
+        return L1_relative()
     else:
         raise ValueError(f"Unknown loss {which}.")
 
