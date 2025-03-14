@@ -23,8 +23,9 @@ hyperparams = {
     'decoder_depth': 1,
     'batch_size': 256,
     'use_POD':True,
-    'use_trunk':False,
+    'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
+    'trunk_epoch':5, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
     'use_fourier':False,
     'use_conv_encoder':True,
     'trunk_size':[100,100,100,100,100],
@@ -32,7 +33,7 @@ hyperparams = {
     'trunk_modes':500,   
     'fourier_modes':50,
     'lr': 0.0015,
-    'n_epochs': 1000,
+    'n_epochs': 10,
     'es_patience': 20,
     'es_delta': 1e-7,
     'sched_patience': 5,
@@ -111,6 +112,7 @@ def main():
         'POD_modes':wandb.config['POD_modes'],
         'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
+        'trunk_epoch':wandb.config['trunk_epoch'], 
         'use_batch_norm': True,
     }
 
@@ -173,9 +175,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device)
-    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device)
-    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device)
+    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
 
     early_stop.step(val_loss)
     print(
@@ -188,12 +190,12 @@ def main():
     for epoch in range(wandb.config['n_epochs']):
         model.train()
         for example in train_dl:
-            train_step(example, data['PHI'],data['Locations'],loss, model, optimiser, device)
+            train_step(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
 
         model.eval()
-        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device)
-        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device)
-        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device)
+        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
+        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
 
         sched.step(val_loss)
         early_stop.step(val_loss)

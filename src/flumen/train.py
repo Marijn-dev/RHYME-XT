@@ -23,24 +23,23 @@ def prep_inputs(x0, y, u, lengths, device):
     return x0, y, u, deltas
 
 
-def validate(data, PHI,locations,loss_fn, model, device):
+def validate(data, PHI,locations,loss_fn, model, device,epoch):
     vl = 0.
     with torch.no_grad():
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
-
-            y_pred = model(x0, u,PHI.to(device), locations.to(device),deltas)
+            y_pred = model(x0, u,PHI.to(device), locations.to(device),deltas,epoch)
             vl += loss_fn(y, y_pred).item()
 
     return vl / len(data)
 
 
-def train_step(example,PHI,locations, loss_fn, model, optimizer, device):
+def train_step(example,PHI,locations, loss_fn, model, optimizer, device,epoch):
     x0, y, u, deltas = prep_inputs(*example, device)
 
     optimizer.zero_grad()
 
-    y_pred = model(x0, u, PHI.to(device),locations.to(device),deltas)
+    y_pred = model(x0, u, PHI.to(device),locations.to(device),deltas,epoch)
     loss = loss_fn(y, y_pred)
 
     loss.backward()

@@ -25,6 +25,7 @@ class CausalFlowModel(nn.Module):
                  POD_modes,
                  trunk_modes,
                  fourier_modes,
+                 trunk_epoch,
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
 
@@ -40,6 +41,7 @@ class CausalFlowModel(nn.Module):
         self.trunk_enabled = use_trunk
         self.trunk_modes = trunk_modes
         self.trunk_size = trunk_size
+        self.trunk_epoch = trunk_epoch
 
         self.fourier_enabled = use_fourier
         self.fourier_modes = fourier_modes
@@ -125,24 +127,29 @@ class CausalFlowModel(nn.Module):
             
 
 
-    def forward(self, x, rnn_input,PHI,locations, deltas):
+    def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
         u = unpadded_u[:, :, :-1]                                         # extract inputs values
 
-        basis_functions = 0
+        basis_functions_input = 0
+        basis_functions_output = 0
 
         # POD basis functions
         if self.POD_enabled:
-            basis_functions += PHI[:, :self.basis_function_modes]
+            basis_functions_input += PHI[:, :self.basis_function_modes]
+            basis_functions_output += PHI[:, :self.basis_function_modes]
 
         # Trunk MLP basis functions
         if self.trunk_enabled:
-            basis_functions +=  self.trunk(locations.view(-1, 1))  
+            trunk_output = self.trunk(locations.view(-1, 1))  
+            basis_functions_output +=  trunk_output
+            if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
+                basis_functions_input += trunk_output
 
         # if normal galerking -> project the inputs
         if self.projection:
-            x = torch.einsum("ni,bn->bi",basis_functions,x) 
-            u = torch.einsum('ni,btn->bti',basis_functions,u) 
+            x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
+            u = torch.einsum('ni,btn->bti',basis_functions_input,u) 
 
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
@@ -178,7 +185,7 @@ class CausalFlowModel(nn.Module):
         
         # Inner product
         else:
-            output = torch.einsum("ni,bi->bn",basis_functions,output_flow)
+            output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
 
         return output
 
