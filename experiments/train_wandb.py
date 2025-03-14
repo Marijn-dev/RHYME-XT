@@ -55,7 +55,7 @@ def get_loss(which):
     elif which == "l1":
         return torch.nn.L1Loss()
     elif which == "l1_relative":
-        return L1_relative()
+        return L1_relative
     else:
         raise ValueError(f"Unknown loss {which}.")
 
@@ -155,7 +155,7 @@ def main():
         cooldown=0,
         factor=1. / wandb.config['sched_factor'])
 
-    loss = get_loss(wandb.config["loss"]).to(device)
+    loss = get_loss(wandb.config["loss"])
 
     early_stop = EarlyStopping(es_patience=wandb.config['es_patience'],
                                es_delta=wandb.config['es_delta'])
