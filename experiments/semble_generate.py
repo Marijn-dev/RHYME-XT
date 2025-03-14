@@ -55,9 +55,13 @@ def get_postprocess(dynamics: str):
             return [
                 rejection_sampling_two_neuron,
             ]
+    elif dynamics == "Heat":
+        return [
+            min_max_normalization,
+        ]
     return []
 
-def rejection_sampling_single_neuro(data):
+def rejection_sampling_single_neuron(data):
     for (k, y) in enumerate(data.state):
         p = y[:, 0].flatten()
         p_min = p.min()
@@ -124,6 +128,12 @@ def rejection_sampling_two_neuron(data):
         data.state_noise[k] = data.state_noise[k][keep_idxs, :]
         data.time[k] = data.time[k][keep_idxs, :]
 
+def min_max_normalization(data):
+    # max values depend on yaml file
+    for (k,x0) in enumerate(data.init_state):
+        data.init_state[k] /= 10
+        data.control_seq[k] /= 6
+        data.state[k] /= 70
 
 if __name__ == '__main__':
     main()
