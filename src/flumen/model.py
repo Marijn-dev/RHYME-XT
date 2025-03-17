@@ -133,7 +133,6 @@ class CausalFlowModel(nn.Module):
         
         basis_functions_input = 0
         basis_functions_output = 0
-
         # POD basis functions
         if self.POD_enabled:
             basis_functions_input += PHI[:, :self.basis_function_modes]
@@ -146,9 +145,9 @@ class CausalFlowModel(nn.Module):
             if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
                 basis_functions_input += trunk_output
             elif self.POD_enabled == False:
-                basis_functions_input = torch.ones_like(trunk_output)
-                
-        # if normal galerking -> project the inputs
+                basis_functions_input = PHI[:, :self.basis_function_modes]
+
+        # if normal galerkin -> project the inputs
         if self.projection:
             x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
             u = torch.einsum('ni,btn->bti',basis_functions_input,u) 
