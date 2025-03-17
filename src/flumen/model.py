@@ -130,7 +130,7 @@ class CausalFlowModel(nn.Module):
     def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
         u = unpadded_u[:, :, :-1]                                         # extract inputs values
-
+        
         basis_functions_input = 0
         basis_functions_output = 0
 
@@ -145,7 +145,9 @@ class CausalFlowModel(nn.Module):
             basis_functions_output +=  trunk_output
             if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
                 basis_functions_input += trunk_output
-
+            elif self.POD_enabled == False:
+                basis_functions_input = torch.ones_like(trunk_output)
+                
         # if normal galerking -> project the inputs
         if self.projection:
             x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
