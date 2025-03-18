@@ -100,7 +100,7 @@ class CausalFlowModel(nn.Module):
 
         # Flow encoder (CNN)
         if self.conv_encoder_enabled:
-            self.x_dnn = DynamicPoolingCNN(in_size=self.in_size_encoder,
+            self.x_dnn = CNN_encoder(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,use_batch_norm=use_batch_norm)
             
         # Flow encoder (MLP)
@@ -324,3 +324,49 @@ class DynamicPoolingCNN(nn.Module):
         input = self.fc(input)
         
         return input
+
+class CNN_encoder(nn.Module):
+    def __init__(self,
+                 in_size,
+                 out_size,
+                 use_batch_norm,
+                 activation=nn.ReLU):
+        super(CNN_encoder, self).__init__()
+
+        self.dropout = nn.Dropout(p=0.3)  
+        self.input_dim = in_size
+        self.output_dim = out_size
+
+        self.layers = nn.ModuleList()
+        conv_channels = [1, 16, 32, 64, 128]
+
+        # Convolutional layers with gradual max pooling
+        for i, (isz, osz) in enumerate(zip(conv_channels[:-1], conv_channels[1:])):
+            self.layers.append(nn.Conv1d(in_channels=isz, 
+                                         out_channels=osz, 
+                                         kernel_size=3,  
+                                         stride=1, 
+                                         padding=1))  
+            
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(osz))
+            
+            self.layers.append(activation())
+
+            # Apply MaxPooling every 2 layers
+            if i % 2 == 0:
+                self.layers.append(nn.MaxPool1d(kernel_size=2, stride=2))  # Reduce size gradually
+
+        self.fc = nn.Linear(conv_channels[-1] * 12, self.output_dim)  # Adjust output size
+    
+    def forward(self, x):
+        x = x.unsqueeze(1)  # (batch_size, 1, input_dim)
+        # Apply convolutional layers with pooling
+        for layer in self.layers:
+            x = layer(x)
+
+        # Flatten and pass through fully connected layer
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
