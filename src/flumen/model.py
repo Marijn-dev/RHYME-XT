@@ -338,7 +338,7 @@ class CNN_encoder(nn.Module):
         self.output_dim = out_size
 
         self.layers = nn.ModuleList()
-        conv_channels = [1, 16, 32, 64, 128]
+        conv_channels = [1, 16, 32]
 
         # Convolutional layers with gradual max pooling
         for i, (isz, osz) in enumerate(zip(conv_channels[:-1], conv_channels[1:])):
@@ -353,11 +353,11 @@ class CNN_encoder(nn.Module):
             
             self.layers.append(activation())
 
-            # Apply MaxPooling every 2 layers
-            if i % 2 == 0:
+            # Apply MaxPooling every 3 layers
+            if i % 3 == 0:
                 self.layers.append(nn.MaxPool1d(kernel_size=2, stride=2))  # Reduce size gradually
 
-        self.fc = nn.Linear(conv_channels[-1] * 12, self.output_dim)  # Adjust output size
+        self.fc = nn.Linear(conv_channels[-1] * 25, self.output_dim)  # Adjust output size
     
     def forward(self, x):
         x = x.unsqueeze(1)  # (batch_size, 1, input_dim)
