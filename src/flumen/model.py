@@ -24,6 +24,7 @@ class CausalFlowModel(nn.Module):
                  trunk_size,
                  POD_modes,
                  trunk_modes,
+                 trunk_model,
                  fourier_modes,
                  trunk_epoch,
                  use_batch_norm):
@@ -120,11 +121,7 @@ class CausalFlowModel(nn.Module):
         
         # Trunk network
         if self.trunk_enabled:
-            self.trunk = TrunkNet(in_size=1,
-                            out_size=self.basis_function_modes,
-                            hidden_size=self.trunk_size,
-                            use_batch_norm=use_batch_norm)
-            
+            self.trunk = trunk_model
 
 
     def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
@@ -146,6 +143,7 @@ class CausalFlowModel(nn.Module):
                 basis_functions_input += trunk_output
             elif self.POD_enabled == False:
                 basis_functions_input = PHI[:, :self.basis_function_modes]
+        
 
         # if normal galerkin -> project the inputs
         if self.projection:
@@ -160,7 +158,7 @@ class CausalFlowModel(nn.Module):
             u_fft = torch.fft.rfft(u, dim=-1)  
             u_fft = u_fft[:,:,:self.fourier_modes]
             u = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
-             
+
         # repack input
         u_deltas = torch.cat((u, deltas), dim=-1)          
         rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
@@ -187,7 +185,6 @@ class CausalFlowModel(nn.Module):
         # Inner product
         else:
             output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
-
         return output
 
 ## MLP
@@ -248,7 +245,7 @@ class TrunkNet(nn.Module):
         for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
             self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
-            self.layers.append(nn.Dropout(0.2))  # Dropout layer
+            # self.layers.append(nn.Dropout(0.01))  # Dropout layer
 
             if use_batch_norm:
                 self.layers.append(nn.BatchNorm1d(osz))
