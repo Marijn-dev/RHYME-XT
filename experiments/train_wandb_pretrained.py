@@ -30,11 +30,10 @@ hyperparams = {
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
     'use_fourier':False,
-    'use_conv_encoder':False,
+    'use_conv_encoder':True,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
     'trunk_modes':50,   
-    'trunk_path': os.getcwd()+'/models_trunk/trunk_model.pth',
     'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -122,10 +121,9 @@ def main():
         'trunk_size': wandb.config['trunk_size'],
         'POD_modes':wandb.config['POD_modes'],
         'trunk_modes':wandb.config['trunk_modes'],
-        'trunk_model':trunk_model,
         'fourier_modes':wandb.config['fourier_modes'],
         'trunk_epoch':wandb.config['trunk_epoch'], 
-        'use_batch_norm': True,
+        'use_batch_norm': False,
     }
 
     run_id = ""
@@ -158,10 +156,10 @@ def main():
     with open(model_save_dir / "metadata.yaml", 'w') as f:
         yaml.dump(model_metadata, f)
 
-    model = CausalFlowModel(**model_args)
+    model = CausalFlowModel(**model_args,trunk_model=trunk_model)
     model.to(device)
 
-    # Freeze the pretrained model for the first 50 epochs
+    # Freeze the pretrained model 
     for param in trunk_model.parameters():
         param.requires_grad = False
 
@@ -206,7 +204,7 @@ def main():
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 20:
+        if epoch == 0:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
