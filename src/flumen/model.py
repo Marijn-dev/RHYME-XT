@@ -145,7 +145,6 @@ class CausalFlowModel(nn.Module):
             elif self.POD_enabled == False:
                 basis_functions_input = PHI[:, :self.basis_function_modes]
         
-
         # if normal galerkin -> project the inputs
         if self.projection:
             x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
@@ -357,8 +356,8 @@ class CNN_encoder(nn.Module):
             if i % 3 == 0:
                 self.layers.append(nn.MaxPool1d(kernel_size=2, stride=2))  # Reduce size gradually
 
-        self.fc = nn.Linear(conv_channels[-1] * 25, self.output_dim)  # Adjust output size
-    
+        self.fc = nn.Linear(conv_channels[-1] * (in_size//2), self.output_dim)  # Adjust output size
+     
     def forward(self, x):
         x = x.unsqueeze(1)  # (batch_size, 1, input_dim)
         # Apply convolutional layers with pooling
@@ -366,6 +365,7 @@ class CNN_encoder(nn.Module):
             x = layer(x)
 
         # Flatten and pass through fully connected layer
+        
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x

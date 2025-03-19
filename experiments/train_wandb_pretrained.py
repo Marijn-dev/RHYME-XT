@@ -18,11 +18,11 @@ import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 64,
+    'control_rnn_size': 32,
     'control_rnn_depth': 1,
-    'encoder_size': 2,
-    'encoder_depth': 2,
-    'decoder_size': 2,
+    'encoder_size': 1,
+    'encoder_depth': 1,
+    'decoder_size': 1,
     'decoder_depth': 1,
     'batch_size': 256,
     'use_POD':False,
@@ -33,7 +33,7 @@ hyperparams = {
     'use_conv_encoder':True,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
-    'trunk_modes':50,   
+    'trunk_modes':25,   
     'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -98,8 +98,8 @@ def main():
     test_data = TrajectoryDataset(data["test"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model.pth')))
+    trunk_model = TrunkNet(in_size=1,out_size=25,hidden_size=[100,100,100,100],use_batch_norm=False)
+    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model_25.pth')))
     trunk_model.to(device)
     trunk_model.train()  
 
