@@ -33,7 +33,7 @@ hyperparams = {
     'use_conv_encoder':True,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
-    'trunk_modes':25,   
+    'trunk_modes':50,   
     'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -41,9 +41,24 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_relative",
+    'loss': "l1_relative_orthogonal_trunk",
 }
 
+def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
+    ### orthogonal loss
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    loss_fn_orth = torch.nn.L1Loss().to(device)
+    I = torch.eye(basis_functions.shape[1]).to(device)  # Identity matrix
+    UTU = torch.matmul(basis_functions.T, basis_functions).to(device)  # Compute U^T 
+    orthogonal_loss = loss_fn_orth(UTU, I)
+
+    ### l1 relative loss
+    abs_error = torch.abs(y_true - y_pred)
+    variance = torch.mean((y_true - torch.mean(y_true))**2)    
+    data_loss = torch.mean(abs_error) / torch.sqrt(variance)
+    
+    total_error = orthogonal_loss + data_loss
+    return total_error, orthogonal_loss, data_loss 
 
 def L1_relative(y_true, y_pred):
 
@@ -60,6 +75,8 @@ def get_loss(which):
         return torch.nn.L1Loss()
     elif which == "l1_relative":
         return L1_relative
+    elif which == "l1_relative_orthogonal_trunk":
+        return l1_relative_orthogonal_trunk
     else:
         raise ValueError(f"Unknown loss {which}.")
 
@@ -98,8 +115,8 @@ def main():
     test_data = TrajectoryDataset(data["test"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=1,out_size=25,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model_25.pth')))
+    trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
+    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model.pth')))
     trunk_model.to(device)
     trunk_model.train()  
 
@@ -183,21 +200,21 @@ def main():
     test_dl = DataLoader(test_data, batch_size=bs, shuffle=True)
 
     header_msg = f"{'Epoch':>5} :: {'Loss (Train)':>16} :: " \
-        f"{'Loss (Val)':>16} :: {'Loss (Test)':>16} :: {'Best (Val)':>16}"
+        f"{'Loss (Val)':>16} :: {'Loss (Test)':>16} :: {'Best (Val)':>16} :: {'Loss orthogonal (Train)':>16}"
 
     print(header_msg)
     print('=' * len(header_msg))
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
+    train_loss, train_loss_ortho = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    val_loss, val_loss_ortho = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    test_loss, test_loss_ortho = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
 
     early_stop.step(val_loss)
     print(
         f"{0:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
+        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
     )
 
     start = time.time()
@@ -215,16 +232,16 @@ def main():
 
 
         model.eval()
-        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
-        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
-        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        train_loss, train_loss_ortho = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
+        val_loss, _ = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        test_loss, _ = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
 
         print(
             f"{epoch + 1:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
+            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
         )
 
         if early_stop.best_model:

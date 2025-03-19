@@ -189,7 +189,7 @@ class CausalFlowModel(nn.Module):
             # nonlinear decoder (Simple MLP)
             output = self.output_NN(output.view(batch_size,-1,1))
             output = output.view(batch_size,-1)
-        return output
+        return output, trunk_output
 
 ## MLP
 class FFNet(nn.Module):

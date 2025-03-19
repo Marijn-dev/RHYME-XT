@@ -25,13 +25,17 @@ def prep_inputs(x0, y, u, lengths, device):
 
 def validate(data, PHI,locations,loss_fn, model, device,epoch):
     vl = 0.
+    orthogonal_loss_tot = 0.
     with torch.no_grad():
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
-            y_pred = model(x0, u,PHI.to(device), locations.to(device),deltas,epoch)
-            vl += loss_fn(y, y_pred).item()
+            y_pred, basis_functions = model(x0, u,PHI.to(device), locations.to(device),deltas,epoch)
+            total_loss, orthogonal_loss, data_loss = loss_fn(y, y_pred, basis_functions)
+            # print(f"total_loss: {total_loss.item()}, orthogonal: {orthogonal_loss.item()}, data_loss: {data_loss.item()}")
+            vl += total_loss.item()
+            orthogonal_loss_tot += orthogonal_loss.item()
 
-    return vl / len(data)
+    return vl / len(data), orthogonal_loss_tot / len(data)
 
 
 def train_step(example,PHI,locations, loss_fn, model, optimizer, device,epoch):
@@ -39,13 +43,13 @@ def train_step(example,PHI,locations, loss_fn, model, optimizer, device,epoch):
 
     optimizer.zero_grad()
 
-    y_pred = model(x0, u, PHI.to(device),locations.to(device),deltas,epoch)
-    loss = loss_fn(y, y_pred)
+    y_pred, basis_functions = model(x0, u, PHI.to(device),locations.to(device),deltas,epoch)
+    total_loss, orthogonal_loss, data_loss = loss_fn(y, y_pred,basis_functions)
 
-    loss.backward()
+    total_loss.backward()
     optimizer.step()
 
-    return loss.item()
+    return total_loss.item()
 
 
 class EarlyStopping:
