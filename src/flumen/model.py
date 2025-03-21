@@ -3,6 +3,46 @@ from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
 
+class DeepONet(nn.Module):
+    def __init__(self,
+                 state_dim,
+                 control_dim,
+                 output_dim,
+                 modes,
+                 use_batch_norm=False):
+        super(DeepONet, self).__init__()
+
+        self.state_dim = state_dim
+        self.control_dim = control_dim
+        self.output_dim = output_dim
+        self.modes = modes
+
+        ## Branch with Initial Condition
+        self.branch_IC = FFNet(in_size=state_dim,out_size = self.modes,hidden_size=[100,100,100,100],use_batch_norm=use_batch_norm)
+
+        ## Branch with Forcing Function
+        self.branch_FF = FFNet(in_size=control_dim+1,out_size = self.modes,hidden_size=[100,100,100,100],use_batch_norm=use_batch_norm)
+
+        ## Trunk taking space and time
+        self.trunk = FFNet(in_size=2,out_size = self.modes*2,hidden_size=[100,100,100,100],use_batch_norm=use_batch_norm)
+
+    def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
+        unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
+        u = unpadded_u[:, :, :-1]                                         # extract inputs values
+        time = deltas.sum(dim=1) * 0.2 # delta values x delta step size
+        indices = unpacked_lengths-1
+        forcing = unpadded_u[torch.arange(x.shape[0]), indices]  # Shape: (256, 51)
+
+        branch_ic = self.branch_IC(x)
+        branch_FF = self.branch_FF(forcing)
+        branch_output = torch.cat((branch_ic,branch_FF),dim=1)
+
+        locations = locations.expand(x.shape[0],-1)
+        time = time.expand(-1,locations.shape[1])
+        trunk_input = torch.stack((locations,time),dim=2)
+        trunk_output = self.trunk(trunk_input)
+        output = torch.einsum("bni,bi->bn",trunk_output,branch_output)
+        return output
 
 class CausalFlowModel(nn.Module):
 
@@ -128,7 +168,7 @@ class CausalFlowModel(nn.Module):
     def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
         u = unpadded_u[:, :, :-1]                                         # extract inputs values
-        
+       
         basis_functions_input = 0
         basis_functions_output = 0
         # POD basis functions
