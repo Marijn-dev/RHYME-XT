@@ -100,7 +100,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='test', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
@@ -207,21 +207,21 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss, train_loss_ortho = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    val_loss, val_loss_ortho = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    test_loss, test_loss_ortho = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
+    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
 
     early_stop.step(val_loss)
     print(
         f"{0:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
+        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
     )
 
     start = time.time()
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 0:
+        if epoch == 5:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
@@ -232,16 +232,16 @@ def main():
 
 
         model.eval()
-        train_loss, train_loss_ortho = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
-        val_loss, _ = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
-        test_loss, _ = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
+        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
 
         print(
             f"{epoch + 1:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
+            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
         )
 
         if early_stop.best_model:

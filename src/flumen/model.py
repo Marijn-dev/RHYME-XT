@@ -163,7 +163,7 @@ class CausalFlowModel(nn.Module):
         if self.trunk_enabled:
             self.trunk = trunk_model
 
-        self.output_NN = FFNet(in_size=1,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=self.basis_function_modes,out_size = 1,hidden_size=[100,100],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
@@ -224,10 +224,9 @@ class CausalFlowModel(nn.Module):
         
         # Inner product
         else:
-            output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
+            output = torch.einsum("ni,bi->bni",basis_functions_output,output_flow)
             batch_size = output.shape[0]
-            # nonlinear decoder (Simple MLP)
-            output = self.output_NN(output.view(batch_size,-1,1))
+            output = self.output_NN(output)
             output = output.view(batch_size,-1)
         return output
 
