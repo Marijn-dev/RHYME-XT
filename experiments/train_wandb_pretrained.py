@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_relative_orthogonal_trunk",
+    'loss': "l1_relative",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -100,7 +100,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='test', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:

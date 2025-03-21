@@ -85,7 +85,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='DON_test', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
 
     
     with data_path.open('rb') as f:
