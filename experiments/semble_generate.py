@@ -25,7 +25,6 @@ def main():
                                                postprocess=postprocess) 
     
     locations = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) if isinstance(sampler._dyn.locations, np.ndarray) else None
-    locations /= settings["dynamics"]["args"]["L"] # normalize to values between 0 and 1
     data = {
         "train": train_data,
         "val": val_data,
