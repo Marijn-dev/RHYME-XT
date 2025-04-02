@@ -78,8 +78,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         x0, t, y, u = trajectory_sampler.get_example(args.time_horizon,
                                                      args.n_samples)
         
-        u = u @ trajectory_sampler._dyn.input_mask.T # only works if dynamics has input mask
-
+        # u = u @ trajectory_sampler._dyn.input_mask.T # only works if dynamics has input mask
         return {
             "init_state": x0,
             "time": t,

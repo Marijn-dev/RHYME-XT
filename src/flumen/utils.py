@@ -1,7 +1,10 @@
 import torch
 import numpy as np
 from argparse import ArgumentParser, ArgumentTypeError
-
+import pickle 
+from pathlib import Path
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider, Button
 
 def print_gpu_info():
     if torch.cuda.is_available():
@@ -188,3 +191,139 @@ def pack_model_inputs(x0, t, u, delta):
                                                        enforce_sorted=True)
 
     return x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+
+def plot_slider_1d(data):
+    """
+     Creates an interactive plot with a slider to visualize how activity and inputs change in time.
+    """
+    train = data['train']
+    x = data['Locations'].numpy()
+    x_lim = x[-1]
+    
+    trajectory = 1
+    current_trajectory = 0
+
+    ## assign data corresponding to trajectory
+    for (x0, x0_n, t, y, y_n, u) in train:
+        current_trajectory += 1
+        dt = t[1][0].numpy()
+        activity = y.numpy()
+        inputs = u.numpy()
+        if current_trajectory == trajectory:
+            break
+
+    upper_lim_y = max([activity.max(), inputs.max()])
+    lower_lim_y = min([activity.min(), inputs.min()])
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    plt.subplots_adjust(bottom=0.25)  # Adjust the bottom margin to make space for the slider and button
+
+    line_activity, = ax.plot(x, activity[0, :], label='u(x)')
+
+    
+    line_input, = ax.plot(x, inputs[0, :], label='Input(x)', linestyle='dashed')
+
+    ax.legend()
+    ax.set_ylim(lower_lim_y, upper_lim_y)
+    ax.set_xlim(0, x_lim)
+    plt.xlabel('x')
+
+    ax_slider = plt.axes([0.25, 0.1, 0.65, 0.03])  # Define the slider's position [left, bottom, width, height]
+    slider = Slider(ax_slider, '', 0, activity.shape[0] - 1, valinit=0, valstep=1)
+    slider.valtext.set_visible(False)  # hide matplotlib slider values
+
+    ax_reset = plt.axes([0.8, 0.02, 0.1, 0.04])  # Define the reset button's position [left, bottom, width, height]
+    reset_button = Button(ax_reset, 'Reset')
+
+    time_label = plt.text(0.5, 0.05, f'Time Step: {slider.val * dt:.2f}', transform=fig.transFigure, ha='center')
+
+    def update(val):
+        time_step = int(slider.val)
+        line_activity.set_ydata(activity[time_step, :])
+
+        line_input.set_ydata(inputs[time_step, :])
+
+        time_label.set_text(f'Time : {time_step * dt:.2f}')
+        fig.canvas.draw_idle()
+
+    def reset(event):
+        slider.set_val(0)
+
+    slider.on_changed(update)
+    reset_button.on_clicked(reset)
+
+    plt.show()
+
+def plot_space_time_3d(data):
+    """
+    Plot a 3D surface of the field activity over space and time.
+    """
+
+    train = data['train']
+    x = data['Locations'].numpy()
+    x_lim = x[-1]
+    dx = x[1] - x[0]
+
+    trajectory = 1
+    current_trajectory = 0
+
+    ## assign data corresponding to trajectory
+    for (x0, x0_n, t, y, y_n, u) in train:
+        current_trajectory += 1
+        dt = t[1][0].numpy()
+        t = t.numpy()
+        activity = y.numpy()
+        inputs = u.numpy()
+        if current_trajectory == trajectory:
+            break
+    
+    upper_lim = activity.max()
+    lower_lim = activity.min()
+
+    x_mesh, t_mesh = np.meshgrid(x, t)
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot the surface
+    surf = ax.plot_surface(t_mesh, x_mesh, activity, cmap=plt.get_cmap('plasma'),
+                           linewidth=0, antialiased=False)
+
+    # Remove the gray shading
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    ax.set_box_aspect([2, 1, 1])
+
+    fig.colorbar(surf, shrink=0.4, aspect=10, pad=0.2)
+
+    ax.zaxis.set_rotate_label(False)
+
+    ax.set_xlabel('t', linespacing=3.2)
+    ax.set_ylabel('x', linespacing=3.1)
+    ax.set_zlabel('u(x,t)', linespacing=3.4, rotation=0)
+
+    ax.zaxis.labelpad = 10
+    ax.set_zlim(lower_lim, upper_lim)
+
+    ax.set_yticks(np.arange(0, x_lim + dx, 2))
+
+    plt.show()
+
+def plot_amari(data_path, plot):
+    '''
+    visualizes particular plot given RawTrajectoryDataset
+    '''
+
+    data_path = Path(data_path)
+    with data_path.open('rb') as f:
+        data = pickle.load(f)
+
+    if plot == "slider_1d":
+        plot_slider_1d(data)
+
+    if plot == "space_time_3d":
+        plot_space_time_3d(data)
+
+if __name__ == "__main__":
+    plot_amari("data/amari_test_data.pkl", "slider_1d")
