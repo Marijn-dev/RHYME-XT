@@ -18,7 +18,7 @@ import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 32,
+    'control_rnn_size': 64,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 1,
@@ -28,9 +28,9 @@ hyperparams = {
     'use_POD':False,
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
-    'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
+    'trunk_epoch':5, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
     'use_fourier':False,
-    'use_conv_encoder':True,
+    'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
     'trunk_modes':50,   
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_relative_orthogonal_trunk",
+    'loss': "l1",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -100,7 +100,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='amari', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
@@ -116,7 +116,7 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model.pth')))
+    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari/trunk_model_amari_50.pth')))
     trunk_model.to(device)
     trunk_model.train()  
 
@@ -207,21 +207,21 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss, train_loss_ortho = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    val_loss, val_loss_ortho = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    test_loss, test_loss_ortho = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
+    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
+    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
 
     early_stop.step(val_loss)
     print(
         f"{0:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
+        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
     )
 
     start = time.time()
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 0:
+        if epoch == wandb.config['trunk_epoch']:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
@@ -232,16 +232,16 @@ def main():
 
 
         model.eval()
-        train_loss, train_loss_ortho = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
-        val_loss, _ = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
-        test_loss, _ = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
+        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
 
         print(
             f"{epoch + 1:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e} :: {train_loss_ortho:>16e}"
+            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
         )
 
         if early_stop.best_model:
