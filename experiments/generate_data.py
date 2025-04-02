@@ -125,7 +125,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     states_combined = torch.cat(train_data.state)  
     _, SIGMA, PHI = torch.linalg.svd(states_combined,full_matrices=False)
 
-    return train_data, val_data, test_data, PHI, SIGMA
+    return train_data, val_data, test_data, PHI.T, SIGMA
 
 
 def make_trajectory_sampler(settings):
