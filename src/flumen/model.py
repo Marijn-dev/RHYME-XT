@@ -75,7 +75,8 @@ class CausalFlowModel(nn.Module):
 
             # standard galerkin -> same basis functions for branch and trunk
             else:
-                self.in_size_encoder = self.control_dim = self.basis_function_modes
+                self.in_size_encoder = self.basis_function_modes
+                self.control_dim = self.basis_function_modes // 2 # in case of multivariate
                 
 
         else:
@@ -86,7 +87,6 @@ class CausalFlowModel(nn.Module):
         if self.fourier_enabled:
             self.fourier_modes = min(self.fourier_modes, self.basis_function_modes // 2)
             self.in_size_encoder = self.control_dim = self.fourier_modes * 2
-
 
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + self.control_dim,
@@ -123,12 +123,12 @@ class CausalFlowModel(nn.Module):
         if self.trunk_enabled:
             self.trunk = trunk_model
 
-        self.output_NN = FFNet(in_size=1,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=2,out_size = 2,hidden_size=[50,50],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
         unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
         u = unpadded_u[:, :, :-1]                                         # extract inputs values
-        
+
         basis_functions_input = 0
         basis_functions_output = 0
         # POD basis functions
@@ -140,15 +140,22 @@ class CausalFlowModel(nn.Module):
         if self.trunk_enabled:
             trunk_output = self.trunk(locations.view(-1, 1))  
             basis_functions_output +=  trunk_output
-            if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
-                basis_functions_input += trunk_output
-            elif self.POD_enabled == False:
-                basis_functions_input = PHI[:, :self.basis_function_modes]
-        
+            basis_functions_input += trunk_output
+
+            # if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
+                # basis_functions_input += trunk_output
+            # elif self.POD_enabled == False:
+                # basis_functions_input = PHI[:, :self.basis_function_modes]
+                
         # if normal galerkin -> project the inputs
         if self.projection:
-            x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
-            u = torch.einsum('ni,btn->bti',basis_functions_input,u) 
+            basis_functions_input_U = basis_functions_input[:,:30]
+            basis_functions_input_V = basis_functions_input[:,30:]
+            x_U = torch.einsum("ni,bn->bi",basis_functions_input_U,x[:, :, 0])
+            x_V = torch.einsum("ni,bn->bi",basis_functions_input_V,x[:, :, 1])
+            x = torch.cat([x_U, x_V], dim=-1)  
+
+            u = torch.einsum('ni,btn->bti',basis_functions_input_U,u) 
 
         if self.fourier_enabled:
             x_fft = torch.fft.rfft(x) 
@@ -184,11 +191,12 @@ class CausalFlowModel(nn.Module):
         
         # Inner product
         else:
-            output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
-            batch_size = output.shape[0]
+            output_U = torch.einsum("ni,bi->bn",basis_functions_output[:,:30],output_flow[:,:30])
+            output_V = torch.einsum("ni,bi->bn",basis_functions_output[:,30:],output_flow[:,30:])
+            output = torch.stack([output_U, output_V], dim=-1)
+            
             # nonlinear decoder (Simple MLP)
-            output = self.output_NN(output.view(batch_size,-1,1))
-            output = output.view(batch_size,-1)
+            output = self.output_NN(output.view(output.shape[0],-1,2))
         return output, trunk_output
 
 ## MLP
@@ -239,6 +247,10 @@ class TrunkNet(nn.Module):
                  activation=nn.Tanh):
         super(TrunkNet, self).__init__()
 
+       
+        B = torch.normal(mean=0.0, std=2, size=(128, 1))
+        self.register_buffer("B", B)  
+
         self.layers = nn.ModuleList()
         self.layers.append(nn.Linear(in_size, hidden_size[0]))
         self.layers.append(activation())
@@ -258,6 +270,8 @@ class TrunkNet(nn.Module):
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
     def forward(self, input):
+        input_proj = 2 * torch.pi * input @ self.B.T
+        input = torch.cat([torch.sin(input_proj), torch.cos(input_proj)], dim=-1)
         for layer in self.layers:
             input = layer(input)
         return input

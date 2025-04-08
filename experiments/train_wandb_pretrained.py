@@ -33,10 +33,10 @@ hyperparams = {
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
-    'trunk_modes':50,   
+    'trunk_modes':60,   
     'fourier_modes':50,
     'lr': 0.0005,
-    'n_epochs': 1000,
+    'n_epochs': 1,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
@@ -100,7 +100,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='amari', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='amari_coupled', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
@@ -115,8 +115,8 @@ def main():
     test_data = TrajectoryDataset(data["test"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari/trunk_model_amari_50.pth')))
+    trunk_model = TrunkNet(in_size=256,out_size=60,hidden_size=[100,100,100,100],use_batch_norm=False)
+    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari_coupled/trunk_model_fourierfeatures_60.pth')))
     trunk_model.to(device)
     trunk_model.train()  
 

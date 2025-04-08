@@ -85,10 +85,9 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             "state": y,
             "control": u,
         }
-
+    
     train_data = [get_example() for _ in range(n_train)]
     trajectory_sampler.reset_rngs()
-
     val_data = [get_example() for _ in range(n_val)]
     trajectory_sampler.reset_rngs()
 
@@ -121,11 +120,23 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
     
-    ## PHI (basis functions from SVD)
-    states_combined = torch.cat(train_data.state)  
-    PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
-    
-    return train_data, val_data, test_data, PHI, SIGMA
+    states_combined = torch.cat(train_data.state)  # Shape: (T, states) or (T, states, 2)
+
+    if states_combined.ndim == 3:
+        # Case with two fields (e.g., u and v)
+        U = states_combined[:, :, 0]  # Shape: (T, states)
+        V = states_combined[:, :, 1]  # Shape: (T, states)
+        PHI_U, SIGMA_U, _ = torch.linalg.svd(U.T, full_matrices=False)
+        PHI_V, SIGMA_V, _ = torch.linalg.svd(V.T, full_matrices=False)
+        PHI = [PHI_U, PHI_V]
+        SIGMA = [SIGMA_U, SIGMA_V]
+
+    elif states_combined.ndim == 2:
+        PHI_U, SIGMA_U, _ = torch.linalg.svd(states_combined.T, full_matrices=False)
+        PHI = [PHI_U]
+        SIGMA = [SIGMA_U]
+
+    return train_data, val_data, test_data, PHI,SIGMA
 
 
 def make_trajectory_sampler(settings):

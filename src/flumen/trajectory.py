@@ -25,11 +25,10 @@ class RawTrajectoryDataset(Dataset):
         self.mask = output_mask
         self.input_mask = input_mask
        
-
         self.init_state = torch.empty(
-            (n_traj, self.state_dim)).type(torch.get_default_dtype())
+            (n_traj, *self.state_dim)).type(torch.get_default_dtype())
         self.init_state_noise = torch.empty(
-            (n_traj, self.state_dim)).type(torch.get_default_dtype())
+            (n_traj, *self.state_dim)).type(torch.get_default_dtype())
 
         self.time = []
         self.state = []
@@ -38,16 +37,16 @@ class RawTrajectoryDataset(Dataset):
 
         for k, sample in enumerate(data):
             self.init_state[k] = torch.from_numpy(sample["init_state"].reshape(
-                (1, self.state_dim)))
+                (1, *self.state_dim)))
             self.init_state_noise[k] = 0.
             self.time.append(
                 torch.from_numpy(sample["time"]).type(
                     torch.get_default_dtype()).reshape((-1, 1)))
 
+
             self.state.append(
                 torch.from_numpy(sample["state"]).type(
-                    torch.get_default_dtype()).reshape((-1, self.state_dim)))
-
+                    torch.get_default_dtype()).reshape((-1, *self.state_dim)))
             self.state_noise.append(
                 torch.normal(mean=0.,
                              std=noise_std,
@@ -104,7 +103,8 @@ class TrajectoryDataset(Dataset):
         self.output_dim = raw_data.output_dim
         self.delta = raw_data.delta
 
-        mask = tuple(bool(v) for v in raw_data.mask)
+        mask = raw_data.mask.astype(bool)
+        mask = torch.tensor(mask, dtype=torch.bool)
 
         init_state = []
         state = []
@@ -118,14 +118,12 @@ class TrajectoryDataset(Dataset):
         for (x0, x0_n, t, y, y_n, u) in raw_data:
             y += y_n
             x0 += x0_n
-
             if max_seq_len == -1:
                 for k_s, y_s in enumerate(y):
                     rnn_input, rnn_input_len = self.process_example(
                         0, k_s, t, u, self.delta)
-
-                    s = y_s.view(1, -1)[:, mask].reshape(-1)
-
+                    
+                    s = y_s.masked_select(mask).view_as(y_s)
                     init_state.append(x0)
                     state.append(s)
                     seq_len_data.append(rnn_input_len)
@@ -187,7 +185,6 @@ class TrajectoryDataset(Dataset):
         deltas[u_sz:] = 0.
 
         rnn_input = torch.hstack((u_seq, deltas))
-
         return rnn_input, u_sz
 
     def __len__(self):

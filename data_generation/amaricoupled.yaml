@@ -1,0 +1,44 @@
+dynamics:
+  name: AmariCoupled
+  args:
+    x_lim: &x_lim 20 # is set as [0,x_lim]
+    dx: &dx 0.05
+    theta: &theta 0.5 
+    diffusion: 1  # 0: False, 1: True, adds diffusion term in v
+    advection: 1  # 0: False, 1: True, adds advection term t v
+    kernel_types: [1, 2] # 0: Guassian, 1: Mex-hat, 2: Oscillatory, 3: Cosine.
+    kernel_pars: [
+        # Kernel 1 (More Excitatory)
+        [3.0, 0.2, 0.5, 0.8, 0.1], # Large positive amplitude, small excitation width, larger inhibition width
+
+        # Kernel 2 (More Inhibitory)
+        #[0.5, 0.8, 1.5, 0.2, 0.1],  # Small positive amplitude, larger negative amplitude, small excitation width, larger inhibition width
+        [1, 0.8, 2] # Oscillatory kernel: [a,b,alpha]
+
+]
+    
+    # kernel_pars: [1, 0.3, 0.9] # Guassian kernel: [a_ex,s_ex,w_in]
+    # kernel_pars: [0.5, 0.4, 0.5, 0.5, 0.15] # Mex-hat kernel: [a_ex,s_ex,a_in,s_in,w_in]
+    # kernel_pars: [1, 0.3, 0.9] # Oscillatory kernel: [a,b,alpha]
+    # kernel_pars: [2, 1, 20, 0.3] # Cosine kernel: [A_1,A_2,a_1,a_2]
+
+sequence_generator:
+  name: Gaussian1D # multipe guassians
+  args:
+    x_lim: *x_lim
+    dx: *dx
+    max_duration: 20 # max duration of signal measured in deltas
+
+# sequence_generator:
+#   name: SinusoidalSequence # multipe guassians
+#   args:
+#     max_freq: 1 # number of guassians
+
+initial_state_generator:
+  name: AmariCoupledInitialState
+  args:
+    x_lim: *x_lim
+    dx: *dx
+    theta: *theta
+
+control_delta: 0.05 # dt in original code for spectral method
