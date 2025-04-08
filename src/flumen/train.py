@@ -30,11 +30,8 @@ def validate(data, PHI,locations,loss_fn, model, device,epoch):
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
             y_pred, basis_functions = model(x0, u,1, locations.to(device),deltas,epoch)
-            print(y_pred.shape)
             total_loss = loss_fn(y, y_pred)
-            # print(f"total_loss: {total_loss.item()}, orthogonal: {orthogonal_loss.item()}, data_loss: {data_loss.item()}")
             vl += total_loss.item()
-            # orthogonal_loss_tot += orthogonal_loss.item()
 
     return vl / len(data)
 
