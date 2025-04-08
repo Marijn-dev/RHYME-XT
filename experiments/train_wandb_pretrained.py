@@ -37,7 +37,7 @@ hyperparams = {
     'trunk_modes':60,   
     'fourier_modes':50,
     'lr': 0.0005,
-    'n_epochs': 1000,
+    'n_epochs': 1,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
@@ -120,11 +120,11 @@ def main():
     trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari_coupled/trunk_model_fourierfeatures_60.pth')))
     trunk_model.to(device)
     trunk_model.train()  
-
+   
     model_args = {
-        'state_dim': train_data.state_dim,
+        'state_dim': list(train_data.state_dim),
         'control_dim': train_data.control_dim,
-        'output_dim': train_data.output_dim,
+        'output_dim': list(train_data.output_dim),
         'control_rnn_size': wandb.config['control_rnn_size'],
         'control_rnn_depth': wandb.config['control_rnn_depth'],
         'encoder_size': wandb.config['encoder_size'],
@@ -141,7 +141,6 @@ def main():
         'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
         'trunk_epoch':wandb.config['trunk_epoch'], 
-        'epoch_unfreeze':wandb.config['epoch_unfreeze'], 
         'use_batch_norm': False,
     }
 
