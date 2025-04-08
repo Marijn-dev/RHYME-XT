@@ -141,7 +141,7 @@ def main():
         'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
         'trunk_epoch':wandb.config['trunk_epoch'], 
-        'trunk_epoch':wandb.config['epoch_unfreeze'], 
+        'epoch_unfreeze':wandb.config['epoch_unfreeze'], 
         'use_batch_norm': False,
     }
 
