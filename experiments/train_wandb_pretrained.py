@@ -22,22 +22,22 @@ hyperparams = {
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 1,
-    'decoder_size': 2,
+    'decoder_size': 3,
     'decoder_depth': 1,
     'batch_size': 256,
     'use_POD':False,
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False)
-    'epoch_unfreeze': 5,
+    'epoch_unfreeze': 0,
     'use_fourier':False,
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
     'POD_modes':50,
-    'trunk_modes':60,   
+    'trunk_modes':30, # should be equal to the modes of the pretrained trunk   
     'fourier_modes':50,
     'lr': 0.0005,
-    'n_epochs': 1,
+    'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
@@ -115,7 +115,7 @@ def main():
         data = pickle.load(f)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=256,out_size=60,hidden_size=[100,100,100,100],use_batch_norm=False)
+    trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=[100,100,100,100],use_batch_norm=False)
     trunk_path = Path(sys_args.load_trunk_path)
     trunk_model.load_state_dict(torch.load(trunk_path))
     trunk_model.to(device)
