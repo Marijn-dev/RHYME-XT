@@ -30,6 +30,7 @@ class CausalFlowModel(nn.Module):
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
 
+       
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.output_dim = output_dim
@@ -149,8 +150,8 @@ class CausalFlowModel(nn.Module):
                 
         # if normal galerkin -> project the inputs
         if self.projection:
-            basis_functions_input_U = basis_functions_input[:,:30]
-            basis_functions_input_V = basis_functions_input[:,30:]
+            basis_functions_input_U = basis_functions_input[:,:self.trunk_modes//2]
+            basis_functions_input_V = basis_functions_input[:,self.trunk_modes//2:]
             x_U = torch.einsum("ni,bn->bi",basis_functions_input_U,x[:, :, 0])
             x_V = torch.einsum("ni,bn->bi",basis_functions_input_V,x[:, :, 1])
             x = torch.cat([x_U, x_V], dim=-1)  
@@ -191,8 +192,8 @@ class CausalFlowModel(nn.Module):
         
         # Inner product
         else:
-            output_U = torch.einsum("ni,bi->bn",basis_functions_output[:,:30],output_flow[:,:30])
-            output_V = torch.einsum("ni,bi->bn",basis_functions_output[:,30:],output_flow[:,30:])
+            output_U = torch.einsum("ni,bi->bn",basis_functions_output[:,:self.trunk_modes//2],output_flow[:,:self.trunk_modes//2])
+            output_V = torch.einsum("ni,bi->bn",basis_functions_output[:,self.trunk_modes//2:],output_flow[:,self.trunk_modes//2:])
             output = torch.stack([output_U, output_V], dim=-1)
             
             # nonlinear decoder (Simple MLP)
