@@ -1,20 +1,27 @@
 dynamics:
   name: AmariCoupled
   args:
-    x_lim: &x_lim 20 # is set as [0,x_lim]
+    x_lim: &x_lim 10 # is set as [0,x_lim]
     dx: &dx 0.05
     theta: &theta 0.5 
+    beta: 2000 # beta term in sigmoid nonlinearity
+    tau_u: 0.5
+    tau_v: 1.1
     diffusion: 1  # 0: False, 1: True, adds diffusion term in v
-    advection: 1  # 0: False, 1: True, adds advection term t v
+    diffusion_coeff: 0.02
+    advection: 1  # 0: False, 1: True, adds advection term in v
+    advection_coeff: 0.5
     kernel_types: [1, 2] # 0: Guassian, 1: Mex-hat, 2: Oscillatory, 3: Cosine.
     kernel_pars: [
         # Kernel 1 (More Excitatory)
-        [3.0, 0.2, 0.5, 0.8, 0.1], # Large positive amplitude, small excitation width, larger inhibition width
+        #[3.0, 0.2, 0.5, 0.8, 0.5], # Large positive amplitude, small excitation width, larger inhibition width
 
+        [5.0, 0.1, 0.3, 1.0, 0.8],
+        #[0.2, 1.0, 3.5, 0.15, 0.05]
+        [6.5, 0.005, 0.9]
         # Kernel 2 (More Inhibitory)
-        #[0.5, 0.8, 1.5, 0.2, 0.1],  # Small positive amplitude, larger negative amplitude, small excitation width, larger inhibition width
-        [1, 0.8, 2] # Oscillatory kernel: [a,b,alpha]
-
+        # [0.5, 0.8, 1.5, 0.2, 0.1],  # Small positive amplitude, larger negative amplitude, small excitation width, larger inhibition width
+        # [1, 0.8, 2] # Oscillatory kernel: [a,b,alpha]
 ]
     
     # kernel_pars: [1, 0.3, 0.9] # Guassian kernel: [a_ex,s_ex,w_in]
@@ -27,12 +34,10 @@ sequence_generator:
   args:
     x_lim: *x_lim
     dx: *dx
-    max_duration: 20 # max duration of signal measured in deltas
-
-# sequence_generator:
-#   name: SinusoidalSequence # multipe guassians
-#   args:
-#     max_freq: 1 # number of guassians
+    duration: [2,10] # [min duration, max duration] of signal measured in deltas
+    amplitude: [0.1,1.5] # [min amplitude, max amplitude]
+    std: [0.1,0.5] # [min std, max std]
+    difference: [1,5] # [min diff, max diff] between pulses in deltas
 
 initial_state_generator:
   name: AmariCoupledInitialState
