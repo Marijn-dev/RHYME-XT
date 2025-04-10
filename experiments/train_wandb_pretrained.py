@@ -87,7 +87,10 @@ def main():
 
     ap.add_argument('load_path', type=str, help="Path to trajectory dataset")
 
+    ap.add_argument('load_trunk_path', type=str, help="Path to pretrained trunk model")
+
     ap.add_argument('name', type=str, help="Name of the experiment.")
+
 
     ap.add_argument('--reset_noise',
                     action='store_true',
@@ -101,7 +104,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='amari_coupled', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='amari_coupled_difficult', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
@@ -111,16 +114,17 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    trunk_model = TrunkNet(in_size=256,out_size=60,hidden_size=[100,100,100,100],use_batch_norm=False)
+    trunk_path = Path(sys_args.load_trunk_path)
+    trunk_model.load_state_dict(torch.load(trunk_path))
+    trunk_model.to(device)
+    trunk_model.train()  
+   
     train_data = TrajectoryDataset(data["train"])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=256,out_size=60,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari_coupled/trunk_model_fourierfeatures_60.pth')))
-    trunk_model.to(device)
-    trunk_model.train()  
-   
     model_args = {
         'state_dim': list(train_data.state_dim),
         'control_dim': train_data.control_dim,
