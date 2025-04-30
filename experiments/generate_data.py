@@ -124,7 +124,6 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     ## PHI (basis functions from SVD)
     states_combined = torch.cat(train_data.state)  
     PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
-    
     return train_data, val_data, test_data, PHI, SIGMA
 
 

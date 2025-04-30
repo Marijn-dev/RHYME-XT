@@ -9,10 +9,11 @@ import pickle, yaml
 from pathlib import Path
 
 from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
-from flumen.train import EarlyStopping, train_step, validate
+from flumen.train import EarlyStopping, train_step, validate,trajectory
 
 from argparse import ArgumentParser
 import time
+import matplotlib.pyplot as plt
 
 import wandb
 import os
@@ -24,16 +25,16 @@ hyperparams = {
     'encoder_depth': 1,
     'decoder_size': 1,
     'decoder_depth': 1,
-    'batch_size': 256,
+    'batch_size': 32,
     'use_POD':False,
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
     'use_fourier':False,
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100,100],
+    'trunk_size':[60,60,60],
     'POD_modes':50,
-    'trunk_modes':50,   
+    'trunk_modes':65,   
     'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -100,7 +101,7 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='amari', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='brian2', name=sys_args.name, config=hyperparams)
 
     ## if conv is on, POD and fourier cant be on
     if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
@@ -115,8 +116,8 @@ def main():
     test_data = TrajectoryDataset(data["test"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/amari/trunk_model_amari_50.pth')))
+    trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=[60,60,60],use_batch_norm=False)
+    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/brian2/lif.pth')))
     trunk_model.to(device)
     trunk_model.train()  
 
@@ -221,7 +222,7 @@ def main():
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 5:
+        if epoch == 0:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
@@ -252,6 +253,23 @@ def main():
             run.summary["best_val"] = val_loss
             run.summary["best_test"] = test_loss
             run.summary["best_epoch"] = epoch + 1
+
+            # visualize a test trajectory:
+            for example in test_dl:
+                    test_loss,y_pred, y, basis_functions = trajectory(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
+                    y_pred_np = y_pred.cpu().numpy()
+                    y_np = y.cpu().cpu().numpy()
+                    fig, ax = plt.subplots()
+                    ax.plot(y_pred_np[0], label='Ground Truth')
+                    ax.plot(y_np[0], label='Prediction')
+                    ax.set_title(f'Epoch {epoch+1}, Test Loss: {test_loss:.4f}')
+                    ax.set_xlabel('Space')
+                    ax.set_ylabel('Output')
+                    ax.legend()
+                    wandb.log({"Best test trajectory": wandb.Image(fig)})
+                    plt.close(fig)
+
+                    break  # remove this break if you want to plot more samples
 
         wandb.log({
             'time': time.time() - start,

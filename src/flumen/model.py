@@ -140,10 +140,10 @@ class CausalFlowModel(nn.Module):
         if self.trunk_enabled:
             trunk_output = self.trunk(locations.view(-1, 1))  
             basis_functions_output +=  trunk_output
-            if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
-                basis_functions_input += trunk_output
-            elif self.POD_enabled == False:
-                basis_functions_input = PHI[:, :self.basis_function_modes]
+            # if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
+            basis_functions_input += trunk_output
+            # elif self.POD_enabled == False:
+                # basis_functions_input = PHI[:, :self.basis_function_modes]
         
         # if normal galerkin -> project the inputs
         if self.projection:
@@ -239,6 +239,10 @@ class TrunkNet(nn.Module):
                  activation=nn.Tanh):
         super(TrunkNet, self).__init__()
 
+       
+        B = torch.normal(mean=0.0, std=100, size=(128, 1))
+        self.register_buffer("B", B)  
+
         self.layers = nn.ModuleList()
         self.layers.append(nn.Linear(in_size, hidden_size[0]))
         self.layers.append(activation())
@@ -258,9 +262,12 @@ class TrunkNet(nn.Module):
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
     def forward(self, input):
+        input_proj = 2 * torch.pi * input @ self.B.T
+        input = torch.cat([torch.sin(input_proj), torch.cos(input_proj)], dim=-1)
         for layer in self.layers:
             input = layer(input)
         return input
+
 
 
 class DynamicPoolingCNN(nn.Module):
