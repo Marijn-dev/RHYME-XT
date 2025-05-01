@@ -1,6 +1,7 @@
 ############ USES A PRETRAINED (ON SVD EXTRACTED BASIS MODES) TRUNK NET ############
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 torch.set_default_dtype(torch.float32)
@@ -69,6 +70,34 @@ def L1_relative(y_true, y_pred):
     
     return relative_error
 
+def L1_relative(y_true, y_pred):
+
+    abs_error = torch.abs(y_true - y_pred)
+    variance = torch.mean((y_true - torch.mean(y_true))**2)    
+    relative_error = torch.mean(abs_error) / torch.sqrt(variance)
+    return relative_error
+
+
+def orthogonality_loss(U):
+    loss_fn_orth = nn.L1Loss()
+    I = torch.eye(U.shape[1], device=U.device)  # Identity matrix
+    UTU = torch.matmul(U.T, U)  # Compute U^T 
+
+    return loss_fn_orth(UTU, I)  # Minimize deviation from I
+
+def unit_norm_loss(U):
+    norms = torch.norm(U, dim=0)  # Compute column-wise norms
+    loss_unit_norm = nn.L1Loss()
+    return loss_unit_norm(norms, torch.ones_like(norms))  # Penalize deviations from 1
+
+def total_loss(U_pred, U_true, alpha=15.0,beta=250.0):
+    data_loss = L1_relative(U_pred, U_true)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(U_pred)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(U_pred)  # Ensure unit norm
+    total_loss = data_loss + alpha * ortho_loss + beta * norm_loss
+
+    return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
+
 def get_loss(which):
     if which == "mse":
         return torch.nn.MSELoss()
@@ -99,27 +128,72 @@ def main():
                     help="If reset_noise is set, set standard deviation ' \
                             'of the measurement noise to this value.")
 
+    ap.add_argument('--pretrained_trunk',
+                    type=str,
+                    default=False,
+                    help="Path to pretrained trunk model, if none is given the trunk will be trained before training the flow model.")
+    
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
     run = wandb.init(project='brian2', name=sys_args.name, config=hyperparams)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    ## if conv is on, POD and fourier cant be on
-    if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
-        print("invalid combination, skip run")
-        return
-    
     with data_path.open('rb') as f:
         data = pickle.load(f)
+    ### Pretrain trunk if no pretrained trunk is given
+    if sys_args.pretrained_trunk == False:
+        print("No pretrained trunk model given, training trunk model...")
+        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        trunk_model.to(device)
+        trunk_model.train()
+        optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
+        PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
+        best_loss = 1000
+        locations = data['Locations'].view(-1,1).to(device)
+        for epoch in range(0,200000):
+        
+            optimizer.zero_grad()
+            PHI_pred = trunk_model(locations)
+            total, rec_loss, ortho_loss, norm_loss = total_loss(PHI, PHI_pred, alpha=1.0, beta=0.1)  # Get all losses
+            total.backward()
+            optimizer.step()
+
+            # save the model
+            if total.item() < best_loss:
+                best_loss = total.item()
+                model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
+
+                torch.save(trunk_model.state_dict(), f"{model_name}.pth")
+                artifact = wandb.Artifact(name=f"{model_name}", type="model")
+                artifact.add_file(f"{model_name}.pth")
+                wandb.log_artifact(artifact)
+                os.remove(f"{model_name}.pth")  # Optional cleanup
+                # print(f"Epoch {i+1}: Improved model saved! Total Loss: {total.item()}")
+
+            if epoch % 5000 == 0: 
+                print(f'epoch {epoch+1}, Total Loss {total.item()}, data Loss {rec_loss.item()}, ortho Loss {ortho_loss.item()}, norm Loss {norm_loss.item()}')
+            wandb.log({
+            'Trunk/epoch': epoch + 1,
+            'Trunk/Total_Loss': total.item(),
+            'Trunk/Data_Loss': rec_loss.item(),
+            'Trunk/Orthogonal_Loss': ortho_loss.item(),
+            'Trunk/Norm_Loss': norm_loss.item(),
+        })
+    else:
+        print("Using pretrained trunk model...")
+        trunk_path = Path(sys_args.pretrained_trunk)
+        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        trunk_model.load_state_dict(torch.load(trunk_path))
+        trunk_model.to(device)
+        trunk_model.train()  
 
     train_data = TrajectoryDataset(data["train"])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=[60,60,60],use_batch_norm=False)
     trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/brian2/lif.pth')))
-    trunk_model.to(device)
-    trunk_model.train()  
+    
 
     model_args = {
         'state_dim': train_data.state_dim,
@@ -144,30 +218,17 @@ def main():
         'use_batch_norm': False,
     }
 
-    run_id = ""
-    run_id += f"Petrov_galerkin_{model_args['use_petrov_galerkin']}_"
-    if model_args['use_fourier']:
-        run_id += f"Fourier_Modes_{model_args['fourier_modes']}_" 
-    if model_args['use_trunk']: 
-        run_id += f"Trunk_Modes_{model_args['trunk_modes']}_" 
-    if model_args['use_POD']: 
-        run_id += f"POD_Modes_{model_args['POD_modes']}_" 
-    if model_args['use_conv_encoder']: 
-        run_id += f"CONV"     
-    if model_args['use_POD'] == False and model_args['use_fourier'] == False and model_args['use_trunk'] == False and model_args['use_conv_encoder']:  
-        run_id += "Regular"  
-
     model_metadata = {
         'args': model_args,
         'data_path': data_path.absolute().as_posix(),
         'data_settings': data["settings"],
         'data_args': data["args"]
     }
-    model_name = f"flow_model-{data_path.stem}-{sys_args.name}-{run_id}"
+    model_name = f"flow_model-{data_path.stem}-{sys_args.name}"
 
     # Prepare for saving the model
     model_save_dir = Path(
-        f"./outputs/{sys_args.name}/{sys_args.name}_{run_id}")
+        f"./outputs/{sys_args.name}/{sys_args.name}")
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Save local copy of metadata
