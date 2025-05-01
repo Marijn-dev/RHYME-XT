@@ -148,7 +148,7 @@ def main():
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
         PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
-        best_loss = 1000
+        best_loss = 0.03
         locations = data['Locations'].view(-1,1).to(device)
         for epoch in range(0,200000):
         
