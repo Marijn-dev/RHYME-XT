@@ -276,7 +276,7 @@ def plot_space_time_flat_trajectory(y, y_pred):
     # Plot side-by-side heatmaps
     fig, axs = plt.subplots(1, 2, figsize=(6, 3),dpi=80)
 
-    im0 = axs[0].imshow(y_np, aspect='auto', cmap='viridis')
+    im0 = axs[0].imshow(y_np, aspect='auto', cmap='viridis',vmin=0, vmax=1)
     axs[0].set_title("Ground Truth (y)")
     plt.colorbar(im0, ax=axs[0])
 
