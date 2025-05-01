@@ -192,6 +192,29 @@ def pack_model_inputs(x0, t, u, delta):
 
     return x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
 
+def trajectory(data,delta):
+    trajectory_index = 0
+    x0, init_state_noise, t, y, state_noise, control_seq = data[trajectory_index]
+    t = t.reshape(-1, 1).flip(0)  # Flip in time
+    x0 = x0.reshape(1, *x0.shape).repeat(t.shape[0], *([1] * len(x0.shape)))
+    rnn_inputs = torch.empty((t.shape[0], control_seq.shape[0], control_seq.shape[1] + 1))
+    lengths = torch.empty((t.shape[0], ), dtype=torch.long)
+    
+    for idx, (t_, u_) in enumerate(zip(t, rnn_inputs)):
+        deltas = torch.ones((control_seq.shape[0], 1))
+        
+        seq_len = 1 + int(np.floor(t_ / delta))
+        lengths[idx] = seq_len
+        deltas[seq_len - 1] = ((t_ - delta * (seq_len - 1)) / delta).item()
+        deltas[seq_len:] = 0.
+        u_[:] = torch.hstack((control_seq, deltas))
+   
+    u_packed = torch.nn.utils.rnn.pack_padded_sequence(rnn_inputs,
+                                                   lengths,
+                                                   batch_first=True,
+                                                   enforce_sorted=True)
+    return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+
 def plot_slider_1d(t,y,inputs,locations):
     """
      Creates an interactive plot with a slider to visualize how activity and inputs change in time.
@@ -241,6 +264,28 @@ def plot_slider_1d(t,y,inputs,locations):
     reset_button.on_clicked(reset)
 
     plt.show()
+
+def plot_space_time_flat_trajectory(y, y_pred):
+    '''returns a flat space-time image of the field activity for both y and y_pred'''
+    # Convert to numpy for plotting
+    y_np = y.detach().cpu().numpy()
+    y_np = np.transpose(y_np)
+    y_pred_np = y_pred.detach().cpu().numpy()
+    y_pred_np = np.transpose(y_pred_np)
+    
+    # Plot side-by-side heatmaps
+    fig, axs = plt.subplots(1, 2, figsize=(6, 3),dpi=80)
+
+    im0 = axs[0].imshow(y_np, aspect='auto', cmap='viridis')
+    axs[0].set_title("Ground Truth (y)")
+    plt.colorbar(im0, ax=axs[0])
+
+    im1 = axs[1].imshow(y_pred_np, aspect='auto', cmap='viridis')
+    axs[1].set_title("Prediction (y_pred)")
+    plt.colorbar(im1, ax=axs[1])
+
+    plt.tight_layout()
+    return fig
 
 def plot_space_time_flat(t, y, u, locations):
     """

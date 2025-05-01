@@ -51,17 +51,6 @@ def train_step(example,PHI,locations, loss_fn, model, optimizer, device,epoch):
 
     return total_loss.item()
 
-def trajectory(example,PHI,locations, loss_fn, model, optimizer, device,epoch):
-    '''returns model output along with result'''
-    x0, y, u, deltas = prep_inputs(*example, device)
-
-    with torch.no_grad():
-        y_pred, basis_functions = model(x0, u, PHI.to(device),locations.to(device),deltas,epoch)
-        total_loss = loss_fn(y, y_pred).item()
-
-
-    return total_loss,y_pred, y, basis_functions
-
 
 class EarlyStopping:
 

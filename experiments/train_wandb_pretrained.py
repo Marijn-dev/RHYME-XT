@@ -10,8 +10,9 @@ import pickle, yaml
 from pathlib import Path
 
 from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
-from flumen.train import EarlyStopping, train_step, validate,trajectory
+from flumen.train import EarlyStopping, train_step, validate
 
+from flumen.utils import trajectory,plot_space_time_flat_trajectory
 from argparse import ArgumentParser
 import time
 import matplotlib.pyplot as plt
@@ -310,35 +311,43 @@ def main():
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
-            run.summary["best_train"] = train_loss
-            run.summary["best_val"] = val_loss
-            run.summary["best_test"] = test_loss
-            run.summary["best_epoch"] = epoch + 1
+            run.summary["Flownet/best_train"] = train_loss
+            run.summary["Flownet/best_val"] = val_loss
+            run.summary["Flownet/best_test"] = test_loss
+            run.summary["Flownet/best_epoch"] = epoch + 1
 
             # visualize a test trajectory:
-            for example in test_dl:
-                    test_loss,y_pred, y, basis_functions = trajectory(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
-                    y_pred_np = y_pred.cpu().numpy()
-                    y_np = y.cpu().cpu().numpy()
-                    fig, ax = plt.subplots()
-                    ax.plot(y_pred_np[0], label='Ground Truth')
-                    ax.plot(y_np[0], label='Prediction')
-                    ax.set_title(f'Epoch {epoch+1}, Test Loss: {test_loss:.4f}')
-                    ax.set_xlabel('Space')
-                    ax.set_ylabel('Output')
-                    ax.legend()
-                    wandb.log({"Best test trajectory": wandb.Image(fig)})
-                    plt.close(fig)
+            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],delta=1) # delta is hardcoded
+            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device), data['PHI'].to(device),data['Locations'].to(device),deltas_feed.to(device),epoch)
+            print(y.shape)
+            print(y_pred.shape)
+            test_loss = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
+            fig = plot_space_time_flat_trajectory(y,y_pred)
+            wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
 
-                    break  # remove this break if you want to plot more samples
+            # for example in test_dl:
+            #         test_loss,y_pred, y, basis_functions = trajectory(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
+            #         y_pred_np = y_pred.cpu().numpy()
+            #         y_np = y.cpu().cpu().numpy()
+            #         fig, ax = plt.subplots()
+            #         ax.plot(y_pred_np[0], label='Ground Truth')
+            #         ax.plot(y_np[0], label='Prediction')
+            #         ax.set_title(f'Epoch {epoch+1}, Test Loss: {test_loss:.4f}')
+            #         ax.set_xlabel('Space')
+            #         ax.set_ylabel('Output')
+            #         ax.legend()
+            #         wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
+            #         plt.close(fig)
+
+            #         break  # remove this break if you want to plot more samples
 
         wandb.log({
-            'time': time.time() - start,
-            'epoch': epoch + 1,
-            'lr': sched.get_last_lr()[0],
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-            'test_loss': test_loss,
+            'Flownet/time': time.time() - start,
+            'Flownet/epoch': epoch + 1,
+            'Flownet/lr': sched.get_last_lr()[0],
+            'Flownet/train_loss': train_loss,
+            'Flownet/val_loss': val_loss,
+            'Flownet/test_loss': test_loss,
         })
 
         if early_stop.early_stop:
