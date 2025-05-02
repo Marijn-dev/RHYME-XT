@@ -27,7 +27,6 @@ class CausalFlowModel(nn.Module):
                  trunk_modes,
                  trunk_model,
                  fourier_modes,
-                 trunk_epoch,
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
 
@@ -43,7 +42,6 @@ class CausalFlowModel(nn.Module):
         self.trunk_enabled = use_trunk
         self.trunk_modes = trunk_modes
         self.trunk_size = trunk_size
-        self.trunk_epoch = trunk_epoch
 
         self.fourier_enabled = use_fourier
         self.fourier_modes = fourier_modes
@@ -142,11 +140,8 @@ class CausalFlowModel(nn.Module):
         if self.trunk_enabled:
             trunk_output = self.trunk(locations.view(-1, 1))  
             basis_functions_output +=  trunk_output
-            # if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
             basis_functions_input += trunk_output
-            # elif self.POD_enabled == False:
-                # basis_functions_input = PHI[:, :self.basis_function_modes]
-        
+            
         # if normal galerkin -> project the inputs
         if self.projection:
             x = torch.einsum("ni,bn->bi",basis_functions_input,x) 

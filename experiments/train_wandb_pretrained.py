@@ -31,8 +31,8 @@ hyperparams = {
     'use_POD':False,
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
-    'unfreeze_epoch':100, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'unfreeze_epoch':10, ## From this epoch onwards, trunk will learn during online training
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'use_fourier':False,
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
@@ -169,7 +169,6 @@ def main():
                 artifact = wandb.Artifact(name=f"{model_name}", type="model")
                 artifact.add_file(f"{model_name}.pth")
                 wandb.log_artifact(artifact)
-                os.remove(f"{model_name}.pth")  # Optional cleanup
                 # print(f"Epoch {i+1}: Improved model saved! Total Loss: {total.item()}")
 
             if epoch % 5000 == 0: 
@@ -214,7 +213,6 @@ def main():
         'POD_modes':wandb.config['POD_modes'],
         'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
-        'unfreeze_epoch':wandb.config['unfreeze_epoch'], 
         'use_batch_norm': False,
     }
 
