@@ -192,9 +192,6 @@ def main():
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
-    trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=[60,60,60],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/brian2/lif.pth')))
-    
 
     model_args = {
         'state_dim': train_data.state_dim,
