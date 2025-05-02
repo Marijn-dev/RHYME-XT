@@ -5,6 +5,7 @@ import pickle
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
+import torch.nn.functional as F
 
 def print_gpu_info():
     if torch.cuda.is_available():
@@ -268,6 +269,7 @@ def plot_slider_1d(t,y,inputs,locations):
 def plot_space_time_flat_trajectory(y, y_pred):
     '''returns a flat space-time image of the field activity for both y and y_pred'''
     # Convert to numpy for plotting
+    y_pred = torch.flip(y_pred, dims=[0])
     y_np = y.detach().cpu().numpy()
     y_np = np.transpose(y_np)
     y_pred_np = y_pred.detach().cpu().numpy()
@@ -285,6 +287,50 @@ def plot_space_time_flat_trajectory(y, y_pred):
     plt.colorbar(im1, ax=axs[1])
 
     plt.tight_layout()
+    return fig
+
+def plot_space_time_flat_trajectory_V2(y, y_pred, time_indices=[0, 100, 400, 600, 800]):
+    '''Returns heatmaps and 1D neuron activity plots at selected time points.'''
+    # Convert to numpy
+    y_pred = torch.flip(y_pred, dims=[0])
+    y_np = y.detach().cpu().numpy().T  # shape: (neurons, time)
+    y_pred_np = y_pred.detach().cpu().numpy().T
+    l1_loss = F.l1_loss(y.cpu(), y_pred.cpu()).item()
+
+    num_times = len(time_indices)
+    fig = plt.figure(figsize=(3 * max(4, num_times), 6), dpi=100)
+    gs = fig.add_gridspec(2, max(4, num_times), height_ratios=[2, 1])
+
+    # Heatmaps
+    ax0 = fig.add_subplot(gs[0, 0:2])
+    im0 = ax0.imshow(y_np, aspect='auto', cmap='viridis', vmin=0, vmax=1)
+    ax0.set_title("Ground Truth (y)")
+    plt.colorbar(im0, ax=ax0)
+    for t in time_indices:
+        ax0.axvline(x=t, color='red', linestyle='--')
+
+    ax1 = fig.add_subplot(gs[0, 2:4])
+    im1 = ax1.imshow(y_pred_np, aspect='auto', cmap='viridis', vmin=0, vmax=1)
+    ax1.set_title("Prediction (y_pred)")
+    plt.colorbar(im1, ax=ax1)
+    for t in time_indices:
+        ax1.axvline(x=t, color='red', linestyle='--')
+
+    # Individual line plots for each selected time step
+    for i, t in enumerate(time_indices):
+        ax = fig.add_subplot(gs[1, i])
+        ax.plot(y_np[:, t], label=r"$u(x)$", linestyle='--',color='b')
+        ax.plot(y_pred_np[:, t], label=r"$u{\text{pred}}(x)$", linestyle='-',color='r')
+        ax.set_title(f"t={t}")
+        ax.set_xlabel("Neuron Index")
+        ax.set_ylabel("Activation")
+        ax.legend()
+        ax.grid(True)
+
+    # Overall title
+    fig.suptitle(f"L1 Loss over trajectory: {l1_loss:.4f}", fontsize=14)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
     return fig
 
 def plot_space_time_flat(t, y, u, locations):

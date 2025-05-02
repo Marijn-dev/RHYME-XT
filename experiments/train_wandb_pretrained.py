@@ -12,7 +12,7 @@ from pathlib import Path
 from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
 from flumen.train import EarlyStopping, train_step, validate
 
-from flumen.utils import trajectory,plot_space_time_flat_trajectory
+from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
 from argparse import ArgumentParser
 import time
 import matplotlib.pyplot as plt
@@ -319,10 +319,9 @@ def main():
             # visualize a test trajectory:
             y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],delta=1) # delta is hardcoded
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device), data['PHI'].to(device),data['Locations'].to(device),deltas_feed.to(device),epoch)
-            print(y.shape)
-            print(y_pred.shape)
-            test_loss = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
-            fig = plot_space_time_flat_trajectory(y,y_pred)
+            test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
+            # fig = plot_space_time_flat_trajectory(y,y_pred)
+            fig = plot_space_time_flat_trajectory_V2(y,y_pred)
             wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
 
             # for example in test_dl:
