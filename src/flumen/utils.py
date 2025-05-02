@@ -320,8 +320,8 @@ def plot_space_time_flat_trajectory_V2(y, y_pred, time_indices=[0, 100, 400, 600
     for i, t in enumerate(time_indices):
         ax = fig.add_subplot(gs[1, i])
         ax.plot(y_np[:, t], label=r"$u(x)$", linestyle='--',color='b')
-        ax.plot(y_pred_np[:, t], label=r"$u{\text{pred}}(x)$", linestyle='-',color='r')
-        ax.set_title(f"t={t}")
+        ax.plot(y_pred_np[:, t], label=r"$u_{\text{pred}}(x)$", linestyle='-',color='r')
+        ax.set_title(f"t={t}, L1 Loss={np.mean(abs(y_np[:, t]-y_pred_np[:, t])) :.4f}")
         ax.set_xlabel("Neuron Index")
         ax.set_ylabel("Activation")
         ax.legend()
