@@ -32,11 +32,12 @@ hyperparams = {
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
     'use_fourier':False,
     'use_conv_encoder':False,
-    'trunk_size':[60,60,60],
+    'trunk_size':[100,100,100],
     'POD_modes':50,
-    'trunk_modes':65,   
+    'trunk_modes':100,   
     'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -206,6 +207,7 @@ def main():
         'use_POD': wandb.config['use_POD'],
         'use_trunk': wandb.config['use_trunk'],
         'use_petrov_galerkin': wandb.config['use_petrov_galerkin'],
+        'use_nonlinear': wandb.config['use_nonlinear'],
         'use_fourier':wandb.config['use_fourier'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],

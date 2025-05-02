@@ -19,6 +19,7 @@ class CausalFlowModel(nn.Module):
                  use_POD,
                  use_trunk,
                  use_petrov_galerkin,
+                 use_nonlinear,
                  use_fourier,
                  use_conv_encoder,
                  trunk_size,
@@ -50,6 +51,7 @@ class CausalFlowModel(nn.Module):
         self.conv_encoder_enabled = use_conv_encoder
 
         self.petrov_galerkin_enabled = use_petrov_galerkin # whether to use galerkin or standard galerkin
+        self.nonlinear_enabled = use_nonlinear # whether to use nonlinear decoder or not
         self.projection = (self.POD_enabled or self.trunk_enabled) and self.petrov_galerkin_enabled == False
 
         if self.POD_enabled:
@@ -184,12 +186,16 @@ class CausalFlowModel(nn.Module):
         
         # Inner product
         else:
-            output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
-            batch_size = output.shape[0]
-            # nonlinear decoder (Simple MLP)
-            output = self.output_NN(output.view(batch_size,-1,1))
-            output = output.view(batch_size,-1)
-        return output, trunk_output
+            if self.nonlinear_enabled:
+                output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
+                batch_size = output.shape[0]
+                # nonlinear decoder (Simple MLP)
+                output = self.output_NN(output.view(batch_size,-1,1))
+                output = output.view(batch_size,-1)
+                return output, trunk_output
+            else: 
+                output = torch.einsum("ni,bi->bn",basis_functions_output,output_flow)
+                return output, trunk_output
 
 ## MLP
 class FFNet(nn.Module):
