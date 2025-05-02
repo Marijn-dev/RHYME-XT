@@ -21,7 +21,7 @@ import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 64,
+    'control_rnn_size': 128,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 1,
@@ -31,7 +31,7 @@ hyperparams = {
     'use_POD':False,
     'use_trunk':True,
     'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
-    'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
+    'unfreeze_epoch':100, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
     'use_fourier':False,
     'use_conv_encoder':False,
@@ -214,7 +214,7 @@ def main():
         'POD_modes':wandb.config['POD_modes'],
         'trunk_modes':wandb.config['trunk_modes'],
         'fourier_modes':wandb.config['fourier_modes'],
-        'trunk_epoch':wandb.config['trunk_epoch'], 
+        'unfreeze_epoch':wandb.config['unfreeze_epoch'], 
         'use_batch_norm': False,
     }
 
@@ -283,7 +283,7 @@ def main():
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 0:
+        if epoch == wandb.config['unfreeze_epoch']:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
