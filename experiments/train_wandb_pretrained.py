@@ -194,9 +194,9 @@ def main():
 
 
     model_args = {
-        'state_dim': train_data.state_dim,
-        'control_dim': train_data.control_dim,
-        'output_dim': train_data.output_dim,
+        'state_dim': int(train_data.state_dim),
+        'control_dim': int(train_data.control_dim),
+        'output_dim': int(train_data.output_dim),
         'control_rnn_size': wandb.config['control_rnn_size'],
         'control_rnn_depth': wandb.config['control_rnn_depth'],
         'encoder_size': wandb.config['encoder_size'],
