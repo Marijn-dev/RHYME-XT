@@ -45,7 +45,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1",
+    'loss': "l1_loss_rejection",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -100,6 +100,15 @@ def total_loss(U_pred, U_true, alpha=15.0,beta=250.0):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
+def l1_loss_rejection(y_true,y_pred):
+    '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
+    Loss = nn.L1Loss()
+    magnitudes = torch.abs(y_true) 
+    probabilities = magnitudes / torch.sum(magnitudes)  # Normalize to get probabilities
+    sampled_indices = torch.multinomial(probabilities, num_samples=20, replacement=False)
+    y_true_sampled, y_pred_sampled = y_true[sampled_indices], y_pred[sampled_indices]
+    return Loss(y_true_sampled, y_pred_sampled)
+
 def get_loss(which):
     if which == "mse":
         return torch.nn.MSELoss()
@@ -109,6 +118,8 @@ def get_loss(which):
         return L1_relative
     elif which == "l1_relative_orthogonal_trunk":
         return l1_relative_orthogonal_trunk
+    elif which == "l1_loss_rejection":
+        return l1_loss_rejection
     else:
         raise ValueError(f"Unknown loss {which}.")
 
