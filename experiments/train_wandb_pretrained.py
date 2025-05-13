@@ -100,13 +100,19 @@ def total_loss(U_pred, U_true, alpha=15.0,beta=250.0):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def l1_loss_rejection(y_true,y_pred):
+def l1_loss_rejection(y_true,y_pred,num_samples=20):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
-    magnitudes = torch.abs(y_true) 
-    probabilities = magnitudes / torch.sum(magnitudes)  # Normalize to get probabilities
-    sampled_indices = torch.multinomial(probabilities, num_samples=20, replacement=False)
-    y_true_sampled, y_pred_sampled = y_true[sampled_indices], y_pred[sampled_indices]
+    magnitudes = torch.abs(y_true)
+    probs = magnitudes / (torch.sum(magnitudes,dim=1,keepdim=True)+ 1e-10)  # Normalize to get probabilities
+    probs = probs + 1e-5  # Avoid zero probabilities
+    indices = torch.stack([
+        torch.multinomial(probs[i], num_samples=num_samples, replacement=False)
+        for i in range(y_true.shape[0])
+    ])
+    batch_indices = torch.arange(y_true.shape[0]).unsqueeze(1)
+    y_true_sampled = y_true[batch_indices,indices]
+    y_pred_sampled = y_pred[batch_indices,indices]
     return Loss(y_true_sampled, y_pred_sampled)
 
 def get_loss(which):
