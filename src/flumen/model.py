@@ -17,6 +17,7 @@ class CausalFlowModel(nn.Module):
                  decoder_size,
                  decoder_depth,
                  use_nonlinear,
+                 IC_encoder_decoder,
                  use_conv_encoder,
                  trunk_size,
                  trunk_modes,
@@ -28,15 +29,16 @@ class CausalFlowModel(nn.Module):
         self.control_dim = control_dim
         self.output_dim = output_dim
         self.control_rnn_size = control_rnn_size
-        self.basis_function_modes = self.state_dim
         self.trunk_modes = trunk_modes
         self.trunk_size = trunk_size
         self.conv_encoder_enabled = use_conv_encoder
         self.nonlinear_enabled = use_nonlinear 
+        self.IC_encoder_decoder_enabled = IC_encoder_decoder
         self.basis_function_modes = self.trunk_modes  
         self.out_size_decoder = self.basis_function_modes
         self.in_size_encoder = self.control_dim = self.basis_function_modes
-        
+        self.control_rnn_depth = control_rnn_depth
+
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + self.control_dim,
             hidden_size=control_rnn_size,
@@ -45,14 +47,26 @@ class CausalFlowModel(nn.Module):
             dropout=0,
         )
 
-        x_dnn_osz = control_rnn_depth * control_rnn_size
-
-        # Flow encoder (CNN)
+        ### Enforce IC ###
+        if self.IC_encoder_decoder_enabled:
+            assert control_rnn_size > self.trunk_modes, "Control RNN size must be greater than trunk modes"	
+            x_dnn_osz = control_rnn_depth * (control_rnn_size-self.trunk_modes)
+        else: 
+            x_dnn_osz = control_rnn_depth * control_rnn_size
+            
+            ### Flow decoder (MLP) ###
+            self.u_dnn = FFNet(in_size=control_rnn_size,
+                            out_size=self.out_size_decoder,
+                            hidden_size=decoder_depth *
+                            (decoder_size * control_rnn_size, ),
+                            use_batch_norm=use_batch_norm)
+        
+        ### Flow encoder (CNN) ###
         if self.conv_encoder_enabled:
             self.x_dnn = CNN_encoder(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,use_batch_norm=use_batch_norm)
             
-        # Flow encoder (MLP)
+        ### Flow encoder (MLP) ###
         else:
             self.x_dnn = FFNet(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,
@@ -60,17 +74,10 @@ class CausalFlowModel(nn.Module):
                            (encoder_size * x_dnn_osz, ), 
                            use_batch_norm=use_batch_norm)
 
-        # Flow decoder (MLP)
-        self.u_dnn = FFNet(in_size=control_rnn_size,
-                           out_size=self.out_size_decoder,
-                           hidden_size=decoder_depth *
-                           (decoder_size * control_rnn_size, ),
-                           use_batch_norm=use_batch_norm)
-        
-        # Trunk (MLP)
+        ### Trunk (MLP) ###
         self.trunk = trunk_model
 
-        # Nonlinear decoder (MLP)
+        ### Nonlinear decoder (MLP) ###
         self.output_NN = FFNet(in_size=1,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
@@ -86,7 +93,14 @@ class CausalFlowModel(nn.Module):
 
         ### Flow encoder ###
         h0 = self.x_dnn(x)
-        h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
+        if self.IC_encoder_decoder_enabled:
+            x_repeated = x.repeat(1,self.control_rnn_depth)
+            x_chunks = torch.chunk(x_repeated,chunks=self.control_rnn_depth, dim=1)
+            enc_chunks = torch.chunk(h0, chunks=self.control_rnn_depth, dim=1)
+            h0 = [torch.cat([b_part, a_part], dim=1) for b_part, a_part in zip(x_chunks, enc_chunks)]
+            h0 = torch.stack(h0)
+        else:
+            h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
         c0 = torch.zeros_like(h0)
 
         ### Flow RNN ###
@@ -98,15 +112,21 @@ class CausalFlowModel(nn.Module):
         encoded_controls = (1 - deltas) * h_shift + deltas * h
 
         ### Flow decoder ###
-        output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
+        if self.IC_encoder_decoder_enabled:
+            output_flow = encoded_controls[range(encoded_controls.shape[0]),
+                                             h_lens - 1, :][:,:self.trunk_modes]
+        else:
+            output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
         
-        
-        if self.nonlinear_enabled:
+        ### Nonlinearity ###
+        if self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output.view(batch_size,-1,1))
             output = output.view(batch_size,-1)
+
+        ### Inner product ###
         else: 
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
         return output, trunk_output

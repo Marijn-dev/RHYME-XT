@@ -30,6 +30,7 @@ hyperparams = {
     'batch_size': 32,
     'unfreeze_epoch':10, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
     'trunk_modes':100,   
@@ -218,6 +219,7 @@ def main():
         'decoder_size': wandb.config['decoder_size'],
         'decoder_depth': wandb.config['decoder_depth'],
         'use_nonlinear': wandb.config['use_nonlinear'],
+        'IC_encoder_decoder':wandb.config['IC_encoder_decoder'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],
         'trunk_modes':wandb.config['trunk_modes'],
@@ -263,7 +265,7 @@ def main():
                                es_delta=wandb.config['es_delta'])
 
     bs = wandb.config['batch_size']
-    train_dl = DataLoader(train_data, batch_size=bs, shuffle=False)
+    train_dl = DataLoader(train_data, batch_size=bs, shuffle=True)
     val_dl = DataLoader(val_data, batch_size=bs, shuffle=True)
     test_dl = DataLoader(test_data, batch_size=bs, shuffle=True)
 
