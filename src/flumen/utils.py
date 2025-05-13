@@ -324,6 +324,8 @@ def plot_space_time_flat_trajectory_V2(y, y_pred, time_indices=[0, 100, 400, 600
         ax.set_title(f"t={t}, L1 Loss={np.mean(abs(y_np[:, t]-y_pred_np[:, t])) :.4f}")
         ax.set_xlabel("Neuron Index")
         ax.set_ylabel("Activation")
+        ax.set_ylim([0, 1])  
+
         ax.legend()
         ax.grid(True)
 
