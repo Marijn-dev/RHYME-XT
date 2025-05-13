@@ -28,17 +28,11 @@ hyperparams = {
     'decoder_size': 1,
     'decoder_depth': 1,
     'batch_size': 32,
-    'use_POD':False,
-    'use_trunk':True,
-    'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
     'unfreeze_epoch':10, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'use_fourier':False,
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
-    'POD_modes':50,
     'trunk_modes':100,   
-    'fourier_modes':50,
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
@@ -159,7 +153,8 @@ def main():
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
-    ### Pretrain trunk if no pretrained trunk is given
+
+    ### Pretrain trunk if no pretrained trunk is given ###
     if sys_args.pretrained_trunk == False:
         print("No pretrained trunk model given, training trunk model...")
         trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
@@ -197,6 +192,8 @@ def main():
             'Trunk/Orthogonal_Loss': ortho_loss.item(),
             'Trunk/Norm_Loss': norm_loss.item(),
         })
+    
+    ### Use pretrained trunk model ###
     else:
         print("Using pretrained trunk model...")
         trunk_path = Path(sys_args.pretrained_trunk)
@@ -220,16 +217,10 @@ def main():
         'encoder_depth': wandb.config['encoder_depth'],
         'decoder_size': wandb.config['decoder_size'],
         'decoder_depth': wandb.config['decoder_depth'],
-        'use_POD': wandb.config['use_POD'],
-        'use_trunk': wandb.config['use_trunk'],
-        'use_petrov_galerkin': wandb.config['use_petrov_galerkin'],
         'use_nonlinear': wandb.config['use_nonlinear'],
-        'use_fourier':wandb.config['use_fourier'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],
-        'POD_modes':wandb.config['POD_modes'],
         'trunk_modes':wandb.config['trunk_modes'],
-        'fourier_modes':wandb.config['fourier_modes'],
         'use_batch_norm': False,
     }
 
@@ -284,9 +275,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
+    train_loss = validate(train_dl,data['Locations'],loss, model, device)
+    val_loss = validate(val_dl,data['Locations'],loss, model, device)
+    test_loss = validate(test_dl,data['Locations'],loss, model,device)
 
     early_stop.step(val_loss)
     print(
@@ -305,13 +296,13 @@ def main():
                 optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
-            train_step(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
+            train_step(example,data['Locations'],loss, model, optimiser, device)
 
 
         model.eval()
-        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
-        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
-        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        train_loss = validate(train_dl,data['Locations'], loss, model, device)
+        val_loss = validate(val_dl, data['Locations'],loss, model, device)
+        test_loss = validate(test_dl,data['Locations'],loss, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
@@ -330,29 +321,12 @@ def main():
             run.summary["Flownet/best_test"] = test_loss
             run.summary["Flownet/best_epoch"] = epoch + 1
 
-            # visualize a test trajectory:
+            ### Visualize trajectory in WB ###
             y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],delta=1) # delta is hardcoded
-            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device), data['PHI'].to(device),data['Locations'].to(device),deltas_feed.to(device),epoch)
+            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
-            # fig = plot_space_time_flat_trajectory(y,y_pred)
             fig = plot_space_time_flat_trajectory_V2(y,y_pred)
             wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
-
-            # for example in test_dl:
-            #         test_loss,y_pred, y, basis_functions = trajectory(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
-            #         y_pred_np = y_pred.cpu().numpy()
-            #         y_np = y.cpu().cpu().numpy()
-            #         fig, ax = plt.subplots()
-            #         ax.plot(y_pred_np[0], label='Ground Truth')
-            #         ax.plot(y_np[0], label='Prediction')
-            #         ax.set_title(f'Epoch {epoch+1}, Test Loss: {test_loss:.4f}')
-            #         ax.set_xlabel('Space')
-            #         ax.set_ylabel('Output')
-            #         ax.legend()
-            #         wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
-            #         plt.close(fig)
-
-            #         break  # remove this break if you want to plot more samples
 
         wandb.log({
             'Flownet/time': time.time() - start,
