@@ -263,7 +263,7 @@ def main():
                                es_delta=wandb.config['es_delta'])
 
     bs = wandb.config['batch_size']
-    train_dl = DataLoader(train_data, batch_size=bs, shuffle=True)
+    train_dl = DataLoader(train_data, batch_size=bs, shuffle=False)
     val_dl = DataLoader(val_data, batch_size=bs, shuffle=True)
     test_dl = DataLoader(test_data, batch_size=bs, shuffle=True)
 
