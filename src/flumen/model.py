@@ -18,6 +18,7 @@ class CausalFlowModel(nn.Module):
                  decoder_depth,
                  use_nonlinear,
                  IC_encoder_decoder,
+                 regular,
                  use_conv_encoder,
                  trunk_size,
                  trunk_modes,
@@ -34,6 +35,7 @@ class CausalFlowModel(nn.Module):
         self.conv_encoder_enabled = use_conv_encoder
         self.nonlinear_enabled = use_nonlinear 
         self.IC_encoder_decoder_enabled = IC_encoder_decoder
+        self.regular_enabled = regular
         self.basis_function_modes = self.trunk_modes  
         self.out_size_decoder = self.basis_function_modes
         self.in_size_encoder = self.control_dim = self.basis_function_modes
@@ -81,16 +83,17 @@ class CausalFlowModel(nn.Module):
         self.output_NN = FFNet(in_size=1,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
+        if self.regular_enabled == False:
+            ### Projection ###
+            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
+            u = unpadded_u[:, :, :-1]                                                           # extract inputs values
+            trunk_output = self.trunk(locations.view(-1, 1))  
+            x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
+            u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
+            u_deltas = torch.cat((u, deltas), dim=-1)          
+            rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
-        ### Projection ###
-        unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
-        u = unpadded_u[:, :, :-1]                                                           # extract inputs values
-        trunk_output = self.trunk(locations.view(-1, 1))  
-        x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
-        u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
-        u_deltas = torch.cat((u, deltas), dim=-1)          
-        rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
-
+        
         ### Flow encoder ###
         h0 = self.x_dnn(x)
         if self.IC_encoder_decoder_enabled:
@@ -115,12 +118,16 @@ class CausalFlowModel(nn.Module):
         if self.IC_encoder_decoder_enabled:
             output_flow = encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :][:,:self.trunk_modes]
+                     
         else:
             output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
+
+        if self.regular_enabled:
+            return output_flow, 1
         
         ### Nonlinearity ###
-        if self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
+        elif self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output.view(batch_size,-1,1))

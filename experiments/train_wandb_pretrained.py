@@ -24,13 +24,14 @@ hyperparams = {
     'control_rnn_size': 128,
     'control_rnn_depth': 1,
     'encoder_size': 1,
-    'encoder_depth': 1,
+    'encoder_depth': 2,
     'decoder_size': 1,
-    'decoder_depth': 1,
+    'decoder_depth': 3,
     'batch_size': 32,
     'unfreeze_epoch':10, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
+    'regular':True, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
     'trunk_modes':100,   
@@ -95,7 +96,7 @@ def total_loss(U_pred, U_true, alpha=15.0,beta=250.0):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def l1_loss_rejection(y_true,y_pred,num_samples=20):
+def l1_loss_rejection(y_true,y_pred,num_samples=75):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
     magnitudes = torch.abs(y_true)
@@ -220,6 +221,7 @@ def main():
         'decoder_depth': wandb.config['decoder_depth'],
         'use_nonlinear': wandb.config['use_nonlinear'],
         'IC_encoder_decoder':wandb.config['IC_encoder_decoder'],
+        'regular': wandb.config['regular'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size': wandb.config['trunk_size'],
         'trunk_modes':wandb.config['trunk_modes'],
