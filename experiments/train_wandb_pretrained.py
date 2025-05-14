@@ -90,7 +90,7 @@ def unit_norm_loss(U):
     loss_unit_norm = nn.L1Loss()
     return loss_unit_norm(norms, torch.ones_like(norms))  # Penalize deviations from 1
 
-def total_loss(U_pred, U_true, alpha=15.0,beta=250.0):
+def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
     data_loss = L1_relative(U_pred, U_true)  # Reconstruction loss
     ortho_loss = orthogonality_loss(U_pred)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(U_pred)  # Ensure unit norm
