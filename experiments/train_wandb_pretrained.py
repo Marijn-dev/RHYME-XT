@@ -28,10 +28,10 @@ hyperparams = {
     'decoder_size': 1,
     'decoder_depth': 3,
     'batch_size': 32,
-    'unfreeze_epoch':10, ## From this epoch onwards, trunk will learn during online training
+    'unfreeze_epoch':100, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
-    'regular':True, # True: standard flow model
+    'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
     'trunk_modes':100,   
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_loss_rejection",
+    'loss': "l1",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -204,7 +204,7 @@ def main():
         trunk_model.to(device)
         trunk_model.train()  
 
-    train_data = TrajectoryDataset(data["train"])
+    train_data = TrajectoryDataset(data["train"],max_seq_len=20,n_samples=3)
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 

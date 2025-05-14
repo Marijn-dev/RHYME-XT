@@ -80,7 +80,7 @@ class CausalFlowModel(nn.Module):
         self.trunk = trunk_model
 
         ### Nonlinear decoder (MLP) ###
-        self.output_NN = FFNet(in_size=1,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[100,100],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
         if self.regular_enabled == False:
@@ -128,11 +128,11 @@ class CausalFlowModel(nn.Module):
         
         ### Nonlinearity ###
         elif self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
-            output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
+            output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
             batch_size = output.shape[0]
-            output = self.output_NN(output.view(batch_size,-1,1))
+            output = self.output_NN(output)
             output = output.view(batch_size,-1)
-
+            
         ### Inner product ###
         else: 
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
