@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1",
+    'loss': "L1_orthogonal",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -68,13 +68,15 @@ def L1_relative(y_true, y_pred):
     
     return relative_error
 
-def L1_relative(y_true, y_pred):
+def L1_orthogonal(y_true,y_pred,basis_functions,alfa=15,beta=100):
+    '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
+    data_loss = nn.L1Loss()
+    data_loss_v = data_loss(y_true,y_pred)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
-    abs_error = torch.abs(y_true - y_pred)
-    variance = torch.mean((y_true - torch.mean(y_true))**2)    
-    relative_error = torch.mean(abs_error) / torch.sqrt(variance)
-    return relative_error
-
+    total_loss = data_loss_v + alfa * ortho_loss + beta * norm_loss
+    return total_loss, data_loss_v
 
 def orthogonality_loss(U):
     loss_fn_orth = nn.L1Loss()
@@ -122,6 +124,8 @@ def get_loss(which):
         return l1_relative_orthogonal_trunk
     elif which == "l1_loss_rejection":
         return l1_loss_rejection
+    elif which == "L1_orthogonal":
+        return L1_orthogonal
     else:
         raise ValueError(f"Unknown loss {which}.")
 
@@ -279,9 +283,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl,data['Locations'],loss, model, device)
-    val_loss = validate(val_dl,data['Locations'],loss, model, device)
-    test_loss = validate(test_dl,data['Locations'],loss, model,device)
+    train_loss, train_loss_data = validate(train_dl,data['Locations'],loss, model, device)
+    _, val_loss = validate(val_dl,data['Locations'],loss, model, device)
+    _, test_loss = validate(test_dl,data['Locations'],loss, model,device)
 
     early_stop.step(val_loss)
     print(
@@ -304,9 +308,9 @@ def main():
 
 
         model.eval()
-        train_loss = validate(train_dl,data['Locations'], loss, model, device)
-        val_loss = validate(val_dl, data['Locations'],loss, model, device)
-        test_loss = validate(test_dl,data['Locations'],loss, model, device)
+        train_loss, train_loss_data = validate(train_dl,data['Locations'], loss, model, device)
+        _, val_loss = validate(val_dl, data['Locations'],loss, model, device)
+        _, test_loss = validate(test_dl,data['Locations'],loss, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
@@ -337,6 +341,7 @@ def main():
             'Flownet/epoch': epoch + 1,
             'Flownet/lr': sched.get_last_lr()[0],
             'Flownet/train_loss': train_loss,
+            'Flownet/train_loss_data': train_loss_data,
             'Flownet/val_loss': val_loss,
             'Flownet/test_loss': test_loss,
         })
