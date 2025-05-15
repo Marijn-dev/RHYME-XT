@@ -123,18 +123,19 @@ class CausalFlowModel(nn.Module):
             output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
 
-        if self.regular_enabled:
-            return output_flow, 1
+        # if self.regular_enabled:
+            # return output_flow, 1
         
         ### Nonlinearity ###
-        elif self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
+        if self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
             output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output)
             output = output.view(batch_size,-1)
-            
+
         ### Inner product ###
         else: 
+            print(output_flow.shape)
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
         return output, trunk_output
 

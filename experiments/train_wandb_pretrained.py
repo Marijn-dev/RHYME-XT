@@ -29,9 +29,9 @@ hyperparams = {
     'decoder_depth': 3,
     'batch_size': 32,
     'unfreeze_epoch':100, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
-    'regular':False, # True: standard flow model
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'regular':True, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100],
     'trunk_modes':100,   
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1_orthogonal",
+    'loss': "L1",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -154,7 +154,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_step', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='brian2', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
