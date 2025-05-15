@@ -30,11 +30,11 @@ hyperparams = {
     'batch_size': 32,
     'unfreeze_epoch':0, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100,100],
-    'trunk_modes':100,   
+    'trunk_modes':500,   
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
@@ -68,10 +68,10 @@ def L1_relative(y_true, y_pred):
     
     return relative_error
 
-def L1_orthogonal(y_true,y_pred,basis_functions,alfa=15,beta=100):
+def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
-    data_loss = l1_loss_rejection()
-    data_loss_v = data_loss(y_true,y_pred)  # Reconstruction loss
+    # data_loss = l1_loss_rejection
+    data_loss_v = l1_loss_rejection(y_true,y_pred)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
@@ -154,7 +154,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='brian2_step', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
