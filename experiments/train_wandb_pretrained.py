@@ -28,12 +28,12 @@ hyperparams = {
     'decoder_size': 1,
     'decoder_depth': 3,
     'batch_size': 32,
-    'unfreeze_epoch':100, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'unfreeze_epoch':0, ## From this epoch onwards, trunk will learn during online training
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
-    'regular':True, # True: standard flow model
+    'regular':False, # True: standard flow model
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100],
+    'trunk_size':[100,100,100,100,100],
     'trunk_modes':100,   
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1",
+    'loss': "L1_orthogonal",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -70,7 +70,7 @@ def L1_relative(y_true, y_pred):
 
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=15,beta=100):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
-    data_loss = nn.L1Loss()
+    data_loss = l1_loss_rejection()
     data_loss_v = data_loss(y_true,y_pred)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
@@ -98,7 +98,7 @@ def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def l1_loss_rejection(y_true,y_pred,num_samples=75):
+def l1_loss_rejection(y_true,y_pred,num_samples=50):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
     magnitudes = torch.abs(y_true)
