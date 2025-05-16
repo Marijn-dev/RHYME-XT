@@ -33,7 +33,7 @@ hyperparams = {
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100,100],
+    'trunk_size':[100,100,100],
     'trunk_modes':100,   
     'lr': 0.0005,
     'n_epochs': 1000,
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1_orthogonal",
+    'loss': "l1",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -71,7 +71,7 @@ def L1_relative(y_true, y_pred):
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
-    data_loss_v = l1_loss_rejection(y_true,y_pred)  # Reconstruction loss
+    data_loss_v, _ = l1_loss_rejection(y_true,y_pred)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
@@ -111,13 +111,24 @@ def l1_loss_rejection(y_true,y_pred,num_samples=50):
     batch_indices = torch.arange(y_true.shape[0]).unsqueeze(1)
     y_true_sampled = y_true[batch_indices,indices]
     y_pred_sampled = y_pred[batch_indices,indices]
-    return Loss(y_true_sampled, y_pred_sampled)
+    Loss_v = Loss(y_true_sampled, y_pred_sampled)
+    return Loss_v, Loss_v
+
+def l1(y_true,y_pred,_):
+    Loss = nn.L1Loss()
+    Loss_v = Loss(y_true,y_pred)
+    return Loss_v, Loss_v
+
+def mse(y_true,y_pred,_):
+    Loss = nn.MSELoss()
+    Loss_v = Loss(y_true,y_pred)
+    return Loss_v, Loss_v
 
 def get_loss(which):
     if which == "mse":
-        return torch.nn.MSELoss()
+        return mse
     elif which == "l1":
-        return torch.nn.L1Loss()
+        return l1
     elif which == "l1_relative":
         return L1_relative
     elif which == "l1_relative_orthogonal_trunk":
