@@ -25,16 +25,16 @@ hyperparams = {
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 2,
-    'decoder_size': 1,
+    'decoder_size': 3,
     'decoder_depth': 3,
-    'batch_size': 32,
+    'batch_size': 64,
     'unfreeze_epoch':0, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100,100,100],
-    'trunk_modes':500,   
+    'trunk_size':[100,100,100,100],
+    'trunk_modes':100,   
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
@@ -154,7 +154,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_step', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='brian2_gaussian', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
