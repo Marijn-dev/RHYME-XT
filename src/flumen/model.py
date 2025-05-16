@@ -135,7 +135,6 @@ class CausalFlowModel(nn.Module):
 
         ### Inner product ###
         else: 
-            print(output_flow.shape)
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
         return output, trunk_output
 

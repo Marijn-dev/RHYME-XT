@@ -193,8 +193,7 @@ def pack_model_inputs(x0, t, u, delta):
 
     return x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
 
-def trajectory(data,delta):
-    trajectory_index = 0
+def trajectory(data,trajectory_index,delta):
     x0, init_state_noise, t, y, state_noise, control_seq = data[trajectory_index]
     t = t.reshape(-1, 1).flip(0)  # Flip in time
     x0 = x0.reshape(1, *x0.shape).repeat(t.shape[0], *([1] * len(x0.shape)))
