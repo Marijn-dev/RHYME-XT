@@ -29,22 +29,22 @@ hyperparams = {
     'decoder_depth': 3,
     'batch_size': 64,
     'unfreeze_epoch':0, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100],
-    'trunk_modes':100,   
+    'trunk_size':[100,100,100,100],
+    'trunk_modes':250,   
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_loss_rejection",
+    'loss': "L1_orthogonal",
 }
 
-def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
+def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
     ### orthogonal loss
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     loss_fn_orth = torch.nn.L1Loss().to(device)
@@ -71,7 +71,7 @@ def L1_relative(y_true, y_pred):
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
-    data_loss_v, _ = l1_loss_rejection(y_true,y_pred)  # Reconstruction loss
+    data_loss_v, _ = L1_loss_rejection(y_true,y_pred)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
@@ -98,7 +98,7 @@ def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def l1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
+def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
     magnitudes = torch.abs(y_true)
@@ -114,27 +114,27 @@ def l1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     Loss_v = Loss(y_true_sampled, y_pred_sampled)
     return Loss_v, Loss_v
 
-def l1(y_true,y_pred,_):
+def L1(y_true,y_pred,_):
     Loss = nn.L1Loss()
     Loss_v = Loss(y_true,y_pred)
     return Loss_v, Loss_v
 
-def mse(y_true,y_pred,_):
+def MSE(y_true,y_pred,_):
     Loss = nn.MSELoss()
     Loss_v = Loss(y_true,y_pred)
     return Loss_v, Loss_v
 
 def get_loss(which):
-    if which == "mse":
-        return mse
-    elif which == "l1":
-        return l1
-    elif which == "l1_relative":
+    if which == "MSE":
+        return MSE
+    elif which == "L1":
+        return L1
+    elif which == "L1_relative":
         return L1_relative
-    elif which == "l1_relative_orthogonal_trunk":
-        return l1_relative_orthogonal_trunk
-    elif which == "l1_loss_rejection":
-        return l1_loss_rejection
+    elif which == "L1_relative_orthogonal_trunk":
+        return L1_relative_orthogonal_trunk
+    elif which == "L1_loss_rejection":
+        return L1_loss_rejection
     elif which == "L1_orthogonal":
         return L1_orthogonal
     else:
