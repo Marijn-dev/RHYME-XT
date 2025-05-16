@@ -289,51 +289,102 @@ def plot_space_time_flat_trajectory(y, y_pred):
     plt.tight_layout()
     return fig
 
-def plot_space_time_flat_trajectory_V2(y, y_pred, time_indices=[0, 100, 400, 600, 800]):
-    '''Returns heatmaps and 1D neuron activity plots at selected time points.'''
-    # Convert to numpy
+
+def plot_space_time_flat_trajectory_V2(
+    y, y_pred,
+    time_indices=[0, 200, 400, 600, 800],
+    space_indices=[0, 25, 50, 75,99]
+):
+    '''Returns:
+       - Heatmaps: Ground truth, Prediction, Absolute Error.
+       - Line plots over space at selected times.
+       - Line plots over time at selected neurons.
+       - Red dotted lines at selected neuron indices.
+    '''
+    # Flip and convert tensors to numpy
     y_pred = torch.flip(y_pred, dims=[0])
     y_np = y.detach().cpu().numpy().T  # shape: (neurons, time)
     y_pred_np = y_pred.detach().cpu().numpy().T
+    error_np = np.abs(y_np - y_pred_np)
     l1_loss = F.l1_loss(y.cpu(), y_pred.cpu()).item()
 
-    num_times = len(time_indices)
-    fig = plt.figure(figsize=(3 * max(4, num_times), 6), dpi=100)
-    gs = fig.add_gridspec(2, max(4, num_times), height_ratios=[2, 1])
+    # Determine global y-limits
+    global_min = min(y_np.min(), y_pred_np.min())
+    global_max = max(y_np.max(), y_pred_np.max())
 
-    # Heatmaps
+    num_times = len(time_indices)
+    num_space = len(space_indices)
+    n_cols = max(4, num_times)
+    n_rows = 3
+
+    fig = plt.figure(figsize=(3 * n_cols, 7), dpi=100)
+    gs = fig.add_gridspec(n_rows, n_cols)
+
+    # --- Heatmaps ---
+
+    # Ground Truth
     ax0 = fig.add_subplot(gs[0, 0:2])
     im0 = ax0.imshow(y_np, aspect='auto', cmap='viridis', vmin=0, vmax=1)
     ax0.set_title("Ground Truth (y)")
     plt.colorbar(im0, ax=ax0)
     for t in time_indices:
         ax0.axvline(x=t, color='red', linestyle='--')
+    for s in space_indices:
+        ax0.axhline(y=s, color='red', linestyle=':')
 
+    # Prediction
     ax1 = fig.add_subplot(gs[0, 2:4])
     im1 = ax1.imshow(y_pred_np, aspect='auto', cmap='viridis', vmin=0, vmax=1)
     ax1.set_title("Prediction (y_pred)")
     plt.colorbar(im1, ax=ax1)
     for t in time_indices:
         ax1.axvline(x=t, color='red', linestyle='--')
+    for s in space_indices:
+        ax1.axhline(y=s, color='red', linestyle=':')
 
-    # Individual line plots for each selected time step
+    # Absolute Error (Same colormap)
+    ax2 = fig.add_subplot(gs[0, 4:])
+    im2 = ax2.imshow(error_np, aspect='auto', cmap='viridis', vmin=0, vmax=1)
+    ax2.set_title("Absolute Error |y - y_pred|")
+    plt.colorbar(im2, ax=ax2)
+#     for t in time_indices:
+#         ax2.axvline(x=t, color='blue', linestyle='--')
+#     for s in space_indices:
+#         ax2.axhline(y=s, color='red', linestyle=':')
+
+    # --- Line plots over space at selected times ---
     for i, t in enumerate(time_indices):
+        y_t = y_np[:, t]
+        y_t_pred = y_pred_np[:, t]
+        L1_loss_t = np.mean(np.abs(y_t - y_t_pred))
+        L2_loss_t = np.mean((y_t - y_t_pred) ** 2)
         ax = fig.add_subplot(gs[1, i])
-        ax.plot(y_np[:, t], label=r"$u(x)$", linestyle='--',color='b')
-        ax.plot(y_pred_np[:, t], label=r"$u_{\text{pred}}(x)$", linestyle='-',color='r')
-        ax.set_title(f"t={t}, L1 Loss={np.mean(abs(y_np[:, t]-y_pred_np[:, t])) :.4f}")
+        ax.plot(y_t, label=r"$u(x)$", linestyle='--', color='b')
+        ax.plot(y_t_pred, label=r"$u_{\text{pred}}(x)$", linestyle='-', color='r')
+        ax.set_ylim(global_min, global_max)
+        ax.set_title(f"t={t}\nL1={L1_loss_t:.4f}, L2={L2_loss_t:.4f}")
         ax.set_xlabel("Neuron Index")
         ax.set_ylabel("Activation")
-        ax.set_ylim([0, 1])  
-
         ax.legend()
         ax.grid(True)
 
-    # Overall title
-    fig.suptitle(f"L1 Loss over trajectory: {l1_loss:.4f}", fontsize=14)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-
+    # --- Line plots over time at selected neurons ---
+    for i, idx in enumerate(space_indices):
+        y_idx = y_np[idx, :]
+        y_pred_idx = y_pred_np[idx, :]
+        l1_loss_neuron = np.mean(np.abs(y_idx - y_pred_idx))
+        ax = fig.add_subplot(gs[2, i])
+        ax.plot(y_idx, label=r"$u(t)$", linestyle='--', color='b')
+        ax.plot(y_pred_idx, label=r"$u_{\text{pred}}(t)$", linestyle='-', color='r')
+        ax.set_ylim(global_min, global_max)
+        ax.set_title(f"Neuron={idx}\nL1={l1_loss_neuron:.4f}")
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Activation")
+        ax.legend()
+        ax.grid(True)
+    fig.tight_layout()
     return fig
+
 
 def plot_space_time_flat(t, y, u, locations):
     """
