@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1",
+    'loss': "l1_loss_rejection",
 }
 
 def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -98,7 +98,7 @@ def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def l1_loss_rejection(y_true,y_pred,num_samples=50):
+def l1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
     magnitudes = torch.abs(y_true)
@@ -179,6 +179,11 @@ def main():
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
         PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
+        # If Trunk_modes is higher than modes obtained from SVD, append 0
+        padding = wandb.config['trunk_modes']-data['PHI'].shape[0]
+        padding = torch.max(torch.tensor(0),torch.tensor(padding))
+        PHI = torch.nn.functional.pad(PHI, (0, padding, 0, 0))  # Pad 10 to the right (columns)
+
         best_loss = 0.03
         locations = data['Locations'].view(-1,1).to(device)
         for epoch in range(0,200000):
@@ -341,7 +346,7 @@ def main():
             run.summary["Flownet/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
-            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],delta=1) # delta is hardcoded
+            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=1) # delta is hardcoded
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
             fig = plot_space_time_flat_trajectory_V2(y,y_pred)
