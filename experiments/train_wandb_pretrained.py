@@ -21,27 +21,27 @@ import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 128,
+    'control_rnn_size': 256,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 2,
     'decoder_size': 3,
     'decoder_depth': 3,
     'batch_size': 64,
-    'unfreeze_epoch':0, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
-    'trunk_modes':250,   
+    'trunk_modes':150,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1_orthogonal",
+    'loss': "L1",
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -171,19 +171,19 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
+    train_data = TrajectoryDataset(data["train"],max_seq_len=20,n_samples=3)
+    val_data = TrajectoryDataset(data["val"])
+    test_data = TrajectoryDataset(data["test"])
+
     ### Pretrain trunk if no pretrained trunk is given ###
     if sys_args.pretrained_trunk == False:
         print("No pretrained trunk model given, training trunk model...")
-        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
         PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
-        # If Trunk_modes is higher than modes obtained from SVD, append 0
-        padding = wandb.config['trunk_modes']-data['PHI'].shape[0]
-        padding = torch.max(torch.tensor(0),torch.tensor(padding))
-        PHI = torch.nn.functional.pad(PHI, (0, padding, 0, 0))  # Pad 10 to the right (columns)
-
         best_loss = 0.03
         locations = data['Locations'].view(-1,1).to(device)
         for epoch in range(0,200000):
@@ -197,6 +197,7 @@ def main():
             # save the model
             if total.item() < best_loss:
                 best_loss = total.item()
+                
                 model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
 
                 torch.save(trunk_model.state_dict(), f"{model_name}.pth")
@@ -207,6 +208,7 @@ def main():
 
             if epoch % 5000 == 0: 
                 print(f'epoch {epoch+1}, Total Loss {total.item()}, data Loss {rec_loss.item()}, ortho Loss {ortho_loss.item()}, norm Loss {norm_loss.item()}')
+
             wandb.log({
             'Trunk/epoch': epoch + 1,
             'Trunk/Total_Loss': total.item(),
@@ -218,16 +220,12 @@ def main():
     ### Use pretrained trunk model ###
     else:
         print("Using pretrained trunk model...")
+        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
         trunk_path = Path(sys_args.pretrained_trunk)
-        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes'],hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
         trunk_model.load_state_dict(torch.load(trunk_path))
         trunk_model.to(device)
         trunk_model.train()  
-
-    train_data = TrajectoryDataset(data["train"],max_seq_len=20,n_samples=3)
-    val_data = TrajectoryDataset(data["val"])
-    test_data = TrajectoryDataset(data["test"])
-
 
     model_args = {
         'state_dim': int(train_data.state_dim),
@@ -269,7 +267,7 @@ def main():
     model.to(device)
 
     # Freeze the pretrained model 
-    for param in trunk_model.parameters():
+    for param in model.trunk_svd.parameters():
         param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])

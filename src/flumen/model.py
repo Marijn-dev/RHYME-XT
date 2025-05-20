@@ -77,17 +77,27 @@ class CausalFlowModel(nn.Module):
                            use_batch_norm=use_batch_norm)
 
         ### Trunk (MLP) ###
-        self.trunk = trunk_model
+        self.trunk_svd = trunk_model # Trained on SVD
+        if trunk_modes > state_dim:
+            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=[100,100],use_batch_norm=False,dropout_prob=0.1)
+        else: 
+            self.trunk_extra = None
 
         ### Nonlinear decoder (MLP) ###
-        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[100,100],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[100,100,100],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
+
+        ### Projection ###
         if self.regular_enabled == False:
-            ### Projection ###
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
             u = unpadded_u[:, :, :-1]                                                           # extract inputs values
-            trunk_output = self.trunk(locations.view(-1, 1))  
+            if self.trunk_extra is not None:                 
+                trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
+                trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
+                trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
+            else:
+                trunk_output = self.trunk_svd(locations.view(-1, 1)) 
             x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
             u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          
@@ -183,6 +193,7 @@ class TrunkNet(nn.Module):
                  out_size,
                  hidden_size,
                  use_batch_norm,
+                 dropout_prob=0.0,
                  activation=nn.Tanh):
         super(TrunkNet, self).__init__()
 
@@ -197,6 +208,9 @@ class TrunkNet(nn.Module):
         if use_batch_norm:
             self.layers.append(nn.BatchNorm1d(hidden_size[0]))
 
+        if dropout_prob > 0:
+            self.layers.append(nn.Dropout(dropout_prob))
+
         for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
             self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
@@ -204,6 +218,8 @@ class TrunkNet(nn.Module):
 
             if use_batch_norm:
                 self.layers.append(nn.BatchNorm1d(osz))
+            if dropout_prob > 0:
+                self.layers.append(nn.Dropout(dropout_prob))
 
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
