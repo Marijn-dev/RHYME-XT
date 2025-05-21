@@ -2,6 +2,7 @@ import torch
 
 
 def prep_inputs(x0, y, u, lengths, device):
+    print(lengths.shape)
     sort_idxs = torch.argsort(lengths, descending=True)
     x0 = x0[sort_idxs]
     y = y[sort_idxs]
