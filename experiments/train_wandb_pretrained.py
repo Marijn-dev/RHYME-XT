@@ -71,7 +71,7 @@ def L1_relative(y_true, y_pred):
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
-    data_loss_v, _ = L1(y_true,y_pred)  # Reconstruction loss
+    data_loss_v, _ = L1(y_true,y_pred,basis_functions)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
