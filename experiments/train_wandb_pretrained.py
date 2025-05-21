@@ -24,24 +24,24 @@ hyperparams = {
     'control_rnn_size': 256,
     'control_rnn_depth': 1,
     'encoder_size': 1,
-    'encoder_depth': 2,
-    'decoder_size': 3,
-    'decoder_depth': 3,
+    'encoder_depth': 1,
+    'decoder_size': 1,
+    'decoder_depth': 2,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
-    'trunk_modes':150,   # if bigger than state dim, second trunk_extra will be used
+    'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1",
+    'loss': "L1_orthogonal",
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -71,7 +71,7 @@ def L1_relative(y_true, y_pred):
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
-    data_loss_v, _ = L1_loss_rejection(y_true,y_pred)  # Reconstruction loss
+    data_loss_v, _ = L1(y_true,y_pred)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
