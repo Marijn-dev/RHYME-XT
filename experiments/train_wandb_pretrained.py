@@ -111,17 +111,17 @@ def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     y_true_sampled = y_true[batch_indices,indices]
     y_pred_sampled = y_pred[batch_indices,indices]
     Loss_v = Loss(y_true_sampled, y_pred_sampled)
-    return Loss_v, 0
+    return Loss_v, torch.tensor(0.0)
 
 def L1(y_true,y_pred,_):
     Loss = nn.L1Loss()
     Loss_v = Loss(y_true,y_pred)
-    return Loss_v, 0
+    return Loss_v, torch.tensor(0.0)
 
 def MSE(y_true,y_pred,_):
     Loss = nn.MSELoss()
     Loss_v = Loss(y_true,y_pred)
-    return Loss_v, 0
+    return Loss_v, torch.tensor(0.0)
 
 def get_loss(which):
     if which == "MSE":
@@ -170,7 +170,7 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"],max_seq_len=-1,n_samples=1)
+    train_data = TrajectoryDataset(data["train"],max_seq_len=10,n_samples=1)
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
