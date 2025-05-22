@@ -41,7 +41,8 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1",
+    'train_loss': "L1_loss_rejection",
+    'val_loss':"L1",
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -71,7 +72,7 @@ def L1_relative(y_true, y_pred):
 def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
-    data_loss_v, _ = L1(y_true,y_pred,basis_functions)  # Reconstruction loss
+    data_loss_v, _ = L1_loss_rejection(y_true,y_pred,basis_functions)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
@@ -97,21 +98,26 @@ def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
 
     return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
 
-def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
+def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=200):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
-    magnitudes = torch.abs(y_true)
-    probs = magnitudes / (torch.sum(magnitudes,dim=1,keepdim=True)+ 1e-10)  # Normalize to get probabilities
-    probs = probs + 1e-5  # Avoid zero probabilities
-    indices = torch.stack([
-        torch.multinomial(probs[i], num_samples=num_samples, replacement=False)
-        for i in range(y_true.shape[0])
-    ])
-    batch_indices = torch.arange(y_true.shape[0]).unsqueeze(1)
-    y_true_sampled = y_true[batch_indices,indices]
-    y_pred_sampled = y_pred[batch_indices,indices]
-    Loss_v = Loss(y_true_sampled, y_pred_sampled)
-    return Loss_v, torch.tensor(0.0)
+    neuron_losses = 0.
+
+    for neuron_index in range(0,y_true.shape[1]):
+        neuron = y_true[:,neuron_index]
+        neuron_pred = y_pred[:,neuron_index]
+        magnitudes = torch.abs(neuron)
+        probs = magnitudes / (torch.sum(magnitudes + 1e-10))  # Normalize to get probabilities
+        probs = probs + 1e-10  # Avoid zero probabilities
+        probs = probs / torch.sum(probs)
+        times_indices = torch.multinomial(probs, num_samples=min(num_samples, y_true.shape[0]), replacement=False)
+        neurons_selected = neuron[times_indices]
+        neurons_selected_predicted = neuron_pred[times_indices]
+        neuron_losses += Loss(neurons_selected,neurons_selected_predicted)
+    
+   
+    return neuron_losses / y_true.shape[1], torch.tensor(0.0)
+
 
 def L1(y_true,y_pred,_):
     Loss = nn.L1Loss()
@@ -278,7 +284,8 @@ def main():
         cooldown=0,
         factor=1. / wandb.config['sched_factor'])
 
-    loss = get_loss(wandb.config["loss"])
+    loss_train = get_loss(wandb.config["train_loss"])
+    loss_val = get_loss(wandb.config["val_loss"])
 
     early_stop = EarlyStopping(es_patience=wandb.config['es_patience'],
                                es_delta=wandb.config['es_delta'])
@@ -296,9 +303,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss, model, device)
-    val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss, model, device)
-    test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss, model,device)
+    train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss_train, model, device)
+    val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss_val, model, device)
+    test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss_val, model,device)
 
     early_stop.step(val_loss_data)
     print(
@@ -317,13 +324,13 @@ def main():
                 optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
-            train_step(example,data['Locations'],loss, model, optimiser, device)
+            train_step(example,data['Locations'],loss_train, model, optimiser, device)
 
 
         model.eval()
-        train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss, model, device)
-        val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss, model, device)
-        test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss, model,device)
+        train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss_train, model, device)
+        val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss_val, model, device)
+        test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss_val, model,device)
 
         sched.step(val_loss_data)
         early_stop.step(val_loss_data)
