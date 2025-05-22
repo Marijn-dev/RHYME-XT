@@ -27,7 +27,7 @@ hyperparams = {
     'encoder_depth': 1,
     'decoder_size': 1,
     'decoder_depth': 2,
-    'batch_size': 64,
+    'batch_size': 16,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1_orthogonal",
+    'loss': "L1",
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -75,8 +75,7 @@ def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
-    total_loss = data_loss_v + alfa * ortho_loss + beta * norm_loss
-    return total_loss, data_loss_v
+    return data_loss_v, alfa * ortho_loss + beta * norm_loss
 
 def orthogonality_loss(U):
     loss_fn_orth = nn.L1Loss()
@@ -112,17 +111,17 @@ def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     y_true_sampled = y_true[batch_indices,indices]
     y_pred_sampled = y_pred[batch_indices,indices]
     Loss_v = Loss(y_true_sampled, y_pred_sampled)
-    return Loss_v, Loss_v
+    return Loss_v, 0
 
 def L1(y_true,y_pred,_):
     Loss = nn.L1Loss()
     Loss_v = Loss(y_true,y_pred)
-    return Loss_v, Loss_v
+    return Loss_v, 0
 
 def MSE(y_true,y_pred,_):
     Loss = nn.MSELoss()
     Loss_v = Loss(y_true,y_pred)
-    return Loss_v, Loss_v
+    return Loss_v, 0
 
 def get_loss(which):
     if which == "MSE":
@@ -165,13 +164,13 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_gaussian', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='delete', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"],max_seq_len=20,n_samples=3)
+    train_data = TrajectoryDataset(data["train"],max_seq_len=-1,n_samples=1)
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
@@ -297,14 +296,14 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss, train_loss_data = validate(train_dl,data['Locations'],loss, model, device)
-    _, val_loss = validate(val_dl,data['Locations'],loss, model, device)
-    _, test_loss = validate(test_dl,data['Locations'],loss, model,device)
+    train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss, model, device)
+    val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss, model, device)
+    test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss, model,device)
 
-    early_stop.step(val_loss)
+    early_stop.step(val_loss_data)
     print(
-        f"{0:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-        f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
+        f"{0:>5d} :: {train_loss_data:>16e} :: {val_loss_data:>16e} :: " \
+        f"{test_loss_data:>16e} :: {early_stop.best_val_loss:>16e}"
     )
 
     start = time.time()
@@ -322,25 +321,25 @@ def main():
 
 
         model.eval()
-        train_loss, train_loss_data = validate(train_dl,data['Locations'], loss, model, device)
-        _, val_loss = validate(val_dl, data['Locations'],loss, model, device)
-        _, test_loss = validate(test_dl,data['Locations'],loss, model, device)
+        train_loss_data, train_loss_basis = validate(train_dl,data['Locations'],loss, model, device)
+        val_loss_data, val_loss_basis = validate(val_dl,data['Locations'],loss, model, device)
+        test_loss_data, test_loss_basis = validate(test_dl,data['Locations'],loss, model,device)
 
-        sched.step(val_loss)
-        early_stop.step(val_loss)
+        sched.step(val_loss_data)
+        early_stop.step(val_loss_data)
 
         print(
-            f"{epoch + 1:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
-            f"{test_loss:>16e} :: {early_stop.best_val_loss:>16e}"
+            f"{epoch + 1:>5d} :: {train_loss_data:>16e} :: {val_loss_data:>16e} :: " \
+            f"{test_loss_data:>16e} :: {early_stop.best_val_loss:>16e}"
         )
 
         if early_stop.best_model:
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
-            run.summary["Flownet/best_train"] = train_loss
-            run.summary["Flownet/best_val"] = val_loss
-            run.summary["Flownet/best_test"] = test_loss
+            run.summary["Flownet/best_train"] = train_loss_data
+            run.summary["Flownet/best_val"] = val_loss_data
+            run.summary["Flownet/best_test"] = test_loss_data
             run.summary["Flownet/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
@@ -354,10 +353,10 @@ def main():
             'Flownet/time': time.time() - start,
             'Flownet/epoch': epoch + 1,
             'Flownet/lr': sched.get_last_lr()[0],
-            'Flownet/train_loss': train_loss,
+            'Flownet/train_loss_basis': train_loss_basis,
             'Flownet/train_loss_data': train_loss_data,
-            'Flownet/val_loss': val_loss,
-            'Flownet/test_loss': test_loss,
+            'Flownet/val_loss': val_loss_data,
+            'Flownet/test_loss': test_loss_data,
         })
 
         if early_stop.early_stop:

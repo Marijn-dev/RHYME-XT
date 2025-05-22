@@ -3,7 +3,7 @@ dynamics:
   args:
     x_lim: &x_lim 25 # [mm]
     tau: 10 # [ms]
-    N: &N 500 # neurons
+    N: &N 100 # neurons
     theta: 1.0 # activation threshold
     refractory: 5 # [ms]
     reset_value: 0 # reset value

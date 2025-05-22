@@ -56,7 +56,6 @@ class RawTrajectoryDataset(Dataset):
             # transform inputs
             if self.input_mask is not None:
                 self.control_dim = sample['control'].shape[1]
-
             self.control_seq.append(
                 torch.from_numpy(sample['control']).type(
                     torch.get_default_dtype()).reshape((-1, self.control_dim)))
@@ -106,18 +105,28 @@ class TrajectoryDataset(Dataset):
 
         mask = tuple(bool(v) for v in raw_data.mask)
 
-        init_state = []
-        state = []
-        rnn_input_data = []
-        seq_len_data = []
+        #### ORIGINAL ###
+        # init_state = []
+        # state = []
+        # rnn_input_data = []
+        # seq_len_data = []
 
         rng = np.random.default_rng()
 
         k_tr = 0
+        init_state_all = []
+        state_all = []
+        rnn_input_all = []
+        seq_len_all = []
 
-        for (x0, x0_n, t, y, y_n, u) in raw_data:
+        for traj_idx, (x0, x0_n, t, y, y_n, u) in enumerate(raw_data):
             y += y_n
             x0 += x0_n
+
+            init_state_ = []
+            state_ = []
+            rnn_input_data_ = []
+            seq_len_data_ = []
 
             if max_seq_len == -1:
                 for k_s, y_s in enumerate(y):
@@ -126,10 +135,16 @@ class TrajectoryDataset(Dataset):
 
                     s = y_s.view(1, -1)[:, mask].reshape(-1)
 
-                    init_state.append(x0)
-                    state.append(s)
-                    seq_len_data.append(rnn_input_len)
-                    rnn_input_data.append(rnn_input)
+                    init_state_.append(x0)
+                    state_.append(s)
+                    seq_len_data_.append(rnn_input_len)
+                    rnn_input_data_.append(rnn_input)
+
+                    #  ### ORIGINAL ###
+                    # init_state.append(x0)
+                    # state.append(s)
+                    # seq_len_data.append(rnn_input_len)
+                    # rnn_input_data.append(rnn_input)
 
             else:
                 for k_s, y_s in enumerate(y):
@@ -149,19 +164,41 @@ class TrajectoryDataset(Dataset):
                         rnn_input, rnn_input_len = self.process_example(
                             k_s, k_s + k_e, t, u, self.delta)
 
-                        init_state.append(y_s)
-                        state.append(y[k_s + k_e, mask])
-                        seq_len_data.append(rnn_input_len)
-                        rnn_input_data.append(rnn_input)
 
-        self.init_state = torch.stack(init_state).type(
-            torch.get_default_dtype())
-        self.state = torch.stack(state).type(torch.get_default_dtype())
-        self.rnn_input = torch.stack(rnn_input_data).type(
-            torch.get_default_dtype())
-        self.seq_lens = torch.tensor(seq_len_data, dtype=torch.long)
+                        init_state_.append(y_s)
+                        state_.append(y[k_s + k_e, mask])
+                        seq_len_data_.append(rnn_input_len)
+                        rnn_input_data_.append(rnn_input)
 
-        self.len = len(init_state)
+                        # ### ORIGINAL ###
+                        # init_state.append(y_s)
+                        # state.append(y[k_s + k_e, mask])
+                        # seq_len_data.append(rnn_input_len)
+                        # rnn_input_data.append(rnn_input)
+
+            # Convert per-trajectory to tensors and append to all
+            init_state_all.append(torch.stack(init_state_).type(torch.get_default_dtype()))
+            state_all.append(torch.stack(state_).type(torch.get_default_dtype()))
+            rnn_input_all.append(torch.stack(rnn_input_data_).type(
+            torch.get_default_dtype()))
+            seq_len_all.append(torch.tensor(seq_len_data_, dtype=torch.long))
+
+        # Final tensors with shape (n_trajectories, T, D)
+        self.init_state = torch.stack(init_state_all)
+        self.state = torch.stack(state_all)
+        self.rnn_input = torch.stack(rnn_input_all)
+        self.seq_lens = torch.stack(seq_len_all)
+        self.len = self.init_state.shape[0] # numer of trajectories
+        
+       
+        # ## ORIGINAL ###
+        # self.init_state = torch.stack(init_state).type(
+        #     torch.get_default_dtype())
+        # self.state = torch.stack(state).type(torch.get_default_dtype())
+        # self.rnn_input = torch.stack(rnn_input_data).type(
+        #     torch.get_default_dtype())
+        # self.seq_lens = torch.tensor(seq_len_data, dtype=torch.long)
+        # self.len = len(init_state)
 
     @staticmethod
     def process_example(start_idx, end_idx, t, u, delta):
