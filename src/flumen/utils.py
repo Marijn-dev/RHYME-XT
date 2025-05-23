@@ -199,7 +199,6 @@ def trajectory(data,trajectory_index,delta):
     x0 = x0.reshape(1, *x0.shape).repeat(t.shape[0], *([1] * len(x0.shape)))
     rnn_inputs = torch.empty((t.shape[0], control_seq.shape[0], control_seq.shape[1] + 1))
     lengths = torch.empty((t.shape[0], ), dtype=torch.long)
-    
     for idx, (t_, u_) in enumerate(zip(t, rnn_inputs)):
         deltas = torch.ones((control_seq.shape[0], 1))
         
@@ -291,7 +290,7 @@ def plot_space_time_flat_trajectory(y, y_pred):
 
 def plot_space_time_flat_trajectory_V2(
     y, y_pred,
-    time_indices=[0, 200, 400, 600, 800],
+    time_indices=[0, 100, 200, 300, 400],
     space_indices=[0, 25, 50, 75,99]
 ):
     '''Returns:

@@ -25,8 +25,8 @@ hyperparams = {
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 1,
-    'decoder_size': 1,
-    'decoder_depth': 2,
+    'decoder_size': 2,
+    'decoder_depth': 3,
     'batch_size': 16,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
     'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
@@ -41,7 +41,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'train_loss': "L1_loss_rejection",
+    'train_loss': "L1",
     'val_loss':"L1",
 }
 
@@ -170,7 +170,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_gaussian', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='brian2_gaussian_V2', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
