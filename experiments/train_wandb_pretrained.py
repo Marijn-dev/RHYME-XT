@@ -101,6 +101,7 @@ def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
 def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
     '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
     Loss = nn.L1Loss()
+    
     magnitudes = torch.abs(y_true)
     probs = magnitudes / (torch.sum(magnitudes,dim=1,keepdim=True)+ 1e-10)  # Normalize to get probabilities
     probs = probs + 1e-5  # Avoid zero probabilities
