@@ -146,6 +146,7 @@ class CausalFlowModel(nn.Module):
         ### Inner product ###
         else: 
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
+            'test' 
         return output, trunk_output
 
 ## MLP
