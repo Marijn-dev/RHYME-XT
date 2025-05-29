@@ -36,6 +36,8 @@ hyperparams = {
     'trunk_size':[100,100,100,100],
     'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 3, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
@@ -166,13 +168,13 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_gaussian', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='delete', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"],max_seq_len=20,n_samples=3)
+    train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
@@ -345,7 +347,7 @@ def main():
             run.summary["Flownet/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
-            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=1) # delta is hardcoded
+            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=2) # delta is hardcoded
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
             fig = plot_space_time_flat_trajectory_V2(y,y_pred)
