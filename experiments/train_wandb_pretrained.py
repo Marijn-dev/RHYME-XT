@@ -21,7 +21,7 @@ import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 256,
+    'control_rnn_size': 150,
     'control_rnn_depth': 1,
     'encoder_size': 1,
     'encoder_depth': 1,
@@ -29,21 +29,22 @@ hyperparams = {
     'decoder_depth': 2,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size':[100,100,100,100],
-    'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
+    'trunk_modes':150,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
-    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 3, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'max_seq_len': -1,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 1, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "L1_orthogonal",
+    'train_loss': "MSE_orthogonal",
+    'val_loss': "L1"
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -74,6 +75,16 @@ def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
     '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
     # data_loss = l1_loss_rejection
     data_loss_v, _ = L1(y_true,y_pred,basis_functions)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
+
+    total_loss = data_loss_v + alfa * ortho_loss + beta * norm_loss
+    return total_loss, data_loss_v
+
+def MSE_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
+    '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
+    # data_loss = l1_loss_rejection
+    data_loss_v, _ = MSE(y_true,y_pred,basis_functions)  # Reconstruction loss
     ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
     norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
 
@@ -140,6 +151,8 @@ def get_loss(which):
         return L1_loss_rejection
     elif which == "L1_orthogonal":
         return L1_orthogonal
+    elif which == "MSE_orthogonal":
+        return MSE_orthogonal
     else:
         raise ValueError(f"Unknown loss {which}.")
 
@@ -168,7 +181,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='delete', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
@@ -282,7 +295,8 @@ def main():
         cooldown=0,
         factor=1. / wandb.config['sched_factor'])
 
-    loss = get_loss(wandb.config["loss"])
+    train_loss_fn = get_loss(wandb.config["train_loss"])
+    val_loss_fn = get_loss(wandb.config["val_loss"])
 
     early_stop = EarlyStopping(es_patience=wandb.config['es_patience'],
                                es_delta=wandb.config['es_delta'])
@@ -300,9 +314,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss, train_loss_data = validate(train_dl,data['Locations'],loss, model, device)
-    _, val_loss = validate(val_dl,data['Locations'],loss, model, device)
-    _, test_loss = validate(test_dl,data['Locations'],loss, model,device)
+    train_loss, train_loss_data = validate(train_dl,data['Locations'],train_loss_fn, model, device)
+    _, val_loss = validate(val_dl,data['Locations'],val_loss_fn, model, device)
+    _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model,device)
 
     early_stop.step(val_loss)
     print(
@@ -321,13 +335,13 @@ def main():
                 optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
-            train_step(example,data['Locations'],loss, model, optimiser, device)
+            train_step(example,data['Locations'],train_loss_fn, model, optimiser, device)
 
 
         model.eval()
-        train_loss, train_loss_data = validate(train_dl,data['Locations'], loss, model, device)
-        _, val_loss = validate(val_dl, data['Locations'],loss, model, device)
-        _, test_loss = validate(test_dl,data['Locations'],loss, model, device)
+        train_loss, train_loss_data = validate(train_dl,data['Locations'], train_loss_fn, model, device)
+        _, val_loss = validate(val_dl, data['Locations'],val_loss_fn, model, device)
+        _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
