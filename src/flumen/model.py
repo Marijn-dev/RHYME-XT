@@ -79,12 +79,12 @@ class CausalFlowModel(nn.Module):
         ### Trunk (MLP) ###
         self.trunk_svd = trunk_model # Trained on SVD
         if trunk_modes > state_dim:
-            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=[100,100],use_batch_norm=False,dropout_prob=0.1)
+            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=[50,50,50,50],use_batch_norm=False,dropout_prob=0.1)
         else: 
             self.trunk_extra = None
 
         ### Nonlinear decoder (MLP) ###
-        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[100,100,100],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[20,20,20],use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
 
