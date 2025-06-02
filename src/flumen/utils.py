@@ -291,7 +291,7 @@ def plot_space_time_flat_trajectory(y, y_pred):
 
 def plot_space_time_flat_trajectory_V2(
     y, y_pred,
-    time_indices=[0, 50, 100, 150, 199],
+    time_indices=[0, 20, 40, 60, 80],
     space_indices=[0, 25, 50, 75,99]
 ):
     '''Returns:

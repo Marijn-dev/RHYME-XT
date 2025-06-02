@@ -61,7 +61,7 @@ def parse_args():
         nargs=2,
         type=percentage,
         help="Percentage of data used for validation and test sets",
-        default=[20, 20])
+        default=[20, 10])
 
     return ap.parse_args()
 
@@ -75,15 +75,15 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     n_train = args.n_trajectories - n_val - n_test
 
     def get_example():
-        x0, t, y, u = trajectory_sampler.get_example(args.time_horizon,
+        x0, t, y, u, y_full = trajectory_sampler.get_example(args.time_horizon,
                                                      args.n_samples)
         
-        # u = u @ trajectory_sampler._dyn.input_mask.T # only works if dynamics has input mask
         return {
             "init_state": x0,
             "time": t,
             "state": y,
             "control": u,
+            "full_state": y_full
         }
 
     train_data = [get_example() for _ in range(n_train)]
@@ -94,7 +94,11 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
 
     test_data = [get_example() for _ in range(n_test)]
 
-
+    states_combined = torch.cat([
+    torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
+    for d in train_data
+    ], dim=0)
+    PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
 
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
@@ -120,10 +124,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     for d in (train_data, val_data, test_data):
         for p in postprocess:
             p(d)
-    
-    ## PHI (basis functions from SVD)
-    states_combined = torch.cat(train_data.state)  
-    PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
+            
     return train_data, val_data, test_data, PHI, SIGMA
 
 
