@@ -54,6 +54,10 @@ def get_postprocess(dynamics: str):
             return [
                 rejection_sampling_two_neuron,
             ]
+    # elif dynamics.startswith("LIFBrian2"):
+    #     return [
+    #         rejection_sampling_n_neuron,
+    #     ]
     elif dynamics == "Heat":
         return [
             min_max_normalization,
@@ -117,6 +121,34 @@ def rejection_sampling_two_neuron(data):
 
         u = torch.rand((len(likelihood_ratio), ))
         keep_idxs = (u <= (likelihood_ratio / lr_bound))
+        keep_idxs[0] = True
+
+        for y_spiking in (y[:, 0], y[:, 5]):
+            peaks, _ = find_peaks(y_spiking)
+            keep_idxs[peaks] = True
+
+        data.state[k] = y[keep_idxs, :]
+        data.state_noise[k] = data.state_noise[k][keep_idxs, :]
+        data.time[k] = data.time[k][keep_idxs, :]
+
+
+def rejection_sampling_n_neuron(data):
+    # data.state has to be shape (Time,Neurons)
+    for (k, y) in enumerate(data.state):
+        p_list = []
+        for neuron in range(y.shape[1]): # shape is (time,neurons)
+            p = y[:, neuron].flatten()
+            p_min = p.min()
+            p = ((p - p_min) / (p.max() - p_min))
+            p_list.append(p)
+        p = torch.stack(p_list)
+        p = torch.max(p, dim=0).values  
+        likelihood_ratio = p / torch.mean(p)
+        lr_bound = torch.max(likelihood_ratio)
+
+        u = torch.rand((len(likelihood_ratio), ))
+        keep_idxs = (u <= (likelihood_ratio / lr_bound))
+
         keep_idxs[0] = True
 
         for y_spiking in (y[:, 0], y[:, 5]):
