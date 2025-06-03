@@ -14,7 +14,7 @@ dynamics:
 
     # kernel_pars: # cosine [0.5, 2, 0.2, 20, 0.3] # guassin[0.15, 0.001] # [0.2, 0.0012] #
     kernel_pars: [0.15, 0.0012]
-    delta: &delta 2
+    delta: &delta 1
 
 sequence_generator:
   name: StepBrian # multipe guassians
