@@ -361,7 +361,7 @@ def main():
             run.summary["Flownet/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
-            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=2) # delta is hardcoded
+            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=1) # delta is hardcoded
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
             fig = plot_space_time_flat_trajectory_V2(y,y_pred)
