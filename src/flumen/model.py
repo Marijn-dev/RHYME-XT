@@ -20,7 +20,9 @@ class CausalFlowModel(nn.Module):
                  IC_encoder_decoder,
                  regular,
                  use_conv_encoder,
-                 trunk_size,
+                 trunk_size_svd,
+                 trunk_size_extra,
+                 NL_size,
                  trunk_modes,
                  trunk_model,
                  use_batch_norm):
@@ -31,7 +33,9 @@ class CausalFlowModel(nn.Module):
         self.output_dim = output_dim
         self.control_rnn_size = control_rnn_size
         self.trunk_modes = trunk_modes
-        self.trunk_size = trunk_size
+        self.trunk_size_svd = trunk_size_svd
+        self.trunk_size_extra = trunk_size_extra
+        self.NL_size = NL_size
         self.conv_encoder_enabled = use_conv_encoder
         self.nonlinear_enabled = use_nonlinear 
         self.IC_encoder_decoder_enabled = IC_encoder_decoder
@@ -79,12 +83,12 @@ class CausalFlowModel(nn.Module):
         ### Trunk (MLP) ###
         self.trunk_svd = trunk_model # Trained on SVD
         if trunk_modes > state_dim:
-            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=[50,50,50,50],use_batch_norm=False,dropout_prob=0.1)
+            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
         else: 
             self.trunk_extra = None
 
         ### Nonlinear decoder (MLP) ###
-        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=[20,20,20],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
 

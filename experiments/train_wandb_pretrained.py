@@ -33,11 +33,13 @@ hyperparams = {
     'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
-    'trunk_size':[100,100,100,100],
+    'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
+    'trunk_size_extra':[50,50,50,50], # hidden size of the trunk modeled as extra layers
+    'NL_size':[20,20,20,20], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':150,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
-    'max_seq_len': -1,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 1, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
@@ -195,7 +197,7 @@ def main():
     if sys_args.pretrained_trunk == False:
         print("No pretrained trunk model given, training trunk model...")
         modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
-        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
@@ -238,7 +240,7 @@ def main():
         print("Using pretrained trunk model...")
         modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
         trunk_path = Path(sys_args.pretrained_trunk)
-        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.load_state_dict(torch.load(trunk_path))
         trunk_model.to(device)
         trunk_model.train()  
@@ -257,8 +259,10 @@ def main():
         'IC_encoder_decoder':wandb.config['IC_encoder_decoder'],
         'regular': wandb.config['regular'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
-        'trunk_size': wandb.config['trunk_size'],
+        'trunk_size_svd': wandb.config['trunk_size_svd'],
+        'trunk_size_extra': wandb.config['trunk_size_extra'],
         'trunk_modes':wandb.config['trunk_modes'],
+        'NL_size':wandb.config['NL_size'],
         'use_batch_norm': False,
     }
 
