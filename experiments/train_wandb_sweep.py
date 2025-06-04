@@ -80,14 +80,14 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
+    train_data = TrajectoryDataset(data["train"],max_seq_len=config['max_seq_len'],n_samples=config['n_samples'])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
     trunk_path = '../models_trunk/brian2/trunk_model-brian_T2500_S100_LOOP.pth'
-    modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+    modes = config['trunk_modes'] if config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
     trunk_path = Path(trunk_path)
-    trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+    trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=config['trunk_size_svd'],use_batch_norm=False)
     trunk_model.load_state_dict(torch.load(trunk_path))
     trunk_model.to(device)
     trunk_model.train()  
@@ -96,20 +96,20 @@ def main():
         'state_dim': int(train_data.state_dim),
         'control_dim': int(train_data.control_dim),
         'output_dim': int(train_data.output_dim),
-        'control_rnn_size': wandb.config['control_rnn_size'],
-        'control_rnn_depth': wandb.config['control_rnn_depth'],
-        'encoder_size': wandb.config['encoder_size'],
-        'encoder_depth': wandb.config['encoder_depth'],
-        'decoder_size': wandb.config['decoder_size'],
-        'decoder_depth': wandb.config['decoder_depth'],
-        'use_nonlinear': wandb.config['use_nonlinear'],
-        'IC_encoder_decoder':wandb.config['IC_encoder_decoder'],
-        'regular': wandb.config['regular'],
-        'use_conv_encoder':wandb.config['use_conv_encoder'],
-        'trunk_size_svd': wandb.config['trunk_size_svd'],
-        'trunk_size_extra': wandb.config['trunk_size_extra'],
-        'trunk_modes':wandb.config['trunk_modes'],
-        'NL_size':wandb.config['NL_size'],
+        'control_rnn_size': config['control_rnn_size'],
+        'control_rnn_depth': config['control_rnn_depth'],
+        'encoder_size': config['encoder_size'],
+        'encoder_depth': config['encoder_depth'],
+        'decoder_size': config['decoder_size'],
+        'decoder_depth': config['decoder_depth'],
+        'use_nonlinear': config['use_nonlinear'],
+        'IC_encoder_decoder':config['IC_encoder_decoder'],
+        'regular': config['regular'],
+        'use_conv_encoder':config['use_conv_encoder'],
+        'trunk_size_svd': config['trunk_size_svd'],
+        'trunk_size_extra': config['trunk_size_extra'],
+        'trunk_modes':config['trunk_modes'],
+        'NL_size':config['NL_size'],
         'use_batch_norm': False,
     }
 
@@ -138,7 +138,7 @@ def main():
         param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
-    optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
+    optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['lr'])
 
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimiser,
@@ -146,13 +146,13 @@ def main():
         cooldown=0,
         factor=1. / wandb.config['sched_factor'])
 
-    train_loss_fn = get_loss(wandb.config["train_loss"])
-    val_loss_fn = get_loss(wandb.config["val_loss"])
+    train_loss_fn = get_loss(config["train_loss"])
+    val_loss_fn = get_loss(config["val_loss"])
 
-    early_stop = EarlyStopping(es_patience=wandb.config['es_patience'],
-                               es_delta=wandb.config['es_delta'])
+    early_stop = EarlyStopping(es_patience=config['es_patience'],
+                               es_delta=config['es_delta'])
 
-    bs = wandb.config['batch_size']
+    bs = config['batch_size']
     train_dl = DataLoader(train_data, batch_size=bs, shuffle=True)
     val_dl = DataLoader(val_data, batch_size=bs, shuffle=True)
     test_dl = DataLoader(test_data, batch_size=bs, shuffle=True)
@@ -177,13 +177,13 @@ def main():
 
     start = time.time()
 
-    for epoch in range(wandb.config['n_epochs']):
+    for epoch in range(config['n_epochs']):
         model.train()
         if epoch == wandb.config['unfreeze_epoch']:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
             for param in trunk_model.parameters():
                 param.requires_grad = True
-                optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
+                optimiser = torch.optim.Adam(model.parameters(), lr=config['lr'])
 
         for example in train_dl:
             train_step(example,data['Locations'],train_loss_fn, model, optimiser, device)
