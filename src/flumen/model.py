@@ -136,12 +136,9 @@ class CausalFlowModel(nn.Module):
         else:
             output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
-
-        # if self.regular_enabled:
-            # return output_flow, 1
         
         ### Nonlinearity ###
-        if self.nonlinear_enabled and self.IC_encoder_decoder_enabled == False:
+        if self.nonlinear_enabled:
             output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output)
@@ -150,7 +147,6 @@ class CausalFlowModel(nn.Module):
         ### Inner product ###
         else: 
             output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
-            'test' 
         return output, trunk_output
 
 ## MLP
@@ -182,7 +178,7 @@ class FFNet(nn.Module):
                 self.layers.append(nn.BatchNorm1d(osz))
 
             self.layers.append(activation())
-            self.layers.append(nn.Dropout(0.2))  # Dropout layer
+            self.layers.append(nn.Dropout(0.1))  # Dropout layer
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
