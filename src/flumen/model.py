@@ -55,8 +55,8 @@ class CausalFlowModel(nn.Module):
 
         ### Enforce IC ###
         if self.IC_encoder_decoder_enabled:
-            assert control_rnn_size > self.trunk_modes, "Control RNN size must be greater than trunk modes"	
-            x_dnn_osz = control_rnn_depth * (control_rnn_size-self.trunk_modes)
+            assert control_rnn_size > 100, "Control RNN size must be greater than trunk modes"	
+            x_dnn_osz = control_rnn_depth * (control_rnn_size-100)
         else: 
             x_dnn_osz = control_rnn_depth * control_rnn_size
             
@@ -109,7 +109,10 @@ class CausalFlowModel(nn.Module):
         #     rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
         # trunk_output = self.trunk(locations.view(-1, 1))  
-        trunk_output = torch.cat([self.trunk(locations.view(-1, 1)) , torch.eye(100)], dim=1) # for spikes
+        device = locations.device  # or model.device if you track it that way
+
+        trunk_output = torch.cat([self.trunk(locations.view(-1, 1)),torch.eye(100, device=device)], dim=1)
+        # trunk_output = torch.cat([self.trunk(locations.view(-1, 1)) , torch.eye(100)], dim=1) # for spikes
 
         ### Flow encoder ###
         h0 = self.x_dnn(x)
@@ -122,7 +125,7 @@ class CausalFlowModel(nn.Module):
         else:
             h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
         c0 = torch.zeros_like(h0)
-
+        
         ### Flow RNN ###
         rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
