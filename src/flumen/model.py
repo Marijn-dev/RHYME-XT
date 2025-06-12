@@ -86,7 +86,7 @@ class CausalFlowModel(nn.Module):
         #     self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
         # else: 
         #     self.trunk_extra = None
-        self.trunk = TrunkNet(in_size=256,out_size=self.trunk_modes,hidden_size=self.trunk_size_svd,use_batch_norm=use_batch_norm,dropout_prob=0.1)
+        self.trunk = TrunkNet(in_size=256,out_size=self.trunk_modes-100,hidden_size=self.trunk_size_svd,use_batch_norm=use_batch_norm,dropout_prob=0.1)
 
         ### Nonlinear decoder (MLP) ###
         self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
@@ -108,10 +108,10 @@ class CausalFlowModel(nn.Module):
         #     u_deltas = torch.cat((u, deltas), dim=-1)          
         #     rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
-        trunk_output = self.trunk(locations.view(-1, 1)) 
+        # trunk_output = self.trunk(locations.view(-1, 1))  
+        trunk_output = torch.cat([self.trunk(locations.view(-1, 1)) , torch.eye(100)], dim=1) # for spikes
 
         ### Flow encoder ###
-        print(x.shape)
         h0 = self.x_dnn(x)
         if self.IC_encoder_decoder_enabled:
             x_repeated = x.repeat(1,self.control_rnn_depth)
