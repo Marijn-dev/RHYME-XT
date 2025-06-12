@@ -42,11 +42,11 @@ class CausalFlowModel(nn.Module):
         self.regular_enabled = regular
         self.basis_function_modes = self.trunk_modes  
         self.out_size_decoder = self.basis_function_modes
-        self.in_size_encoder = self.control_dim = self.basis_function_modes
+        self.in_size_encoder = state_dim
         self.control_rnn_depth = control_rnn_depth
 
         self.u_rnn = torch.nn.LSTM(
-            input_size=1 + self.control_dim,
+            input_size=1 + 100,
             hidden_size=control_rnn_size,
             batch_first=True,
             num_layers=control_rnn_depth,
@@ -74,41 +74,44 @@ class CausalFlowModel(nn.Module):
             
         ### Flow encoder (MLP) ###
         else:
-            self.x_dnn = FFNet(in_size=self.in_size_encoder,
+            self.x_dnn = FFNet(in_size=100,
                            out_size=x_dnn_osz,
                            hidden_size=encoder_depth *
                            (encoder_size * x_dnn_osz, ), 
                            use_batch_norm=use_batch_norm)
 
-        ### Trunk (MLP) ###
-        self.trunk_svd = trunk_model # Trained on SVD
-        if trunk_modes > state_dim:
-            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
-        else: 
-            self.trunk_extra = None
+        # ### Trunk (MLP) ###
+        # self.trunk_svd = trunk_model # Trained on SVD
+        # if trunk_modes > state_dim:
+        #     self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
+        # else: 
+        #     self.trunk_extra = None
+        self.trunk = TrunkNet(in_size=256,out_size=self.trunk_modes,hidden_size=self.trunk_size_svd,use_batch_norm=use_batch_norm,dropout_prob=0.1)
 
         ### Nonlinear decoder (MLP) ###
         self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas):
 
-        ### Projection ###
-        if self.regular_enabled == False:
-            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
-            u = unpadded_u[:, :, :-1]                                                           # extract inputs values
-            if self.trunk_extra is not None:                 
-                trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
-                trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
-                trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
-            else:
-                trunk_output = self.trunk_svd(locations.view(-1, 1)) 
-            x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
-            u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
-            u_deltas = torch.cat((u, deltas), dim=-1)          
-            rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
+        # ### Projection ###
+        # if self.regular_enabled == False:
+        #     unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
+        #     u = unpadded_u[:, :, :-1]                                                           # extract inputs values
+        #     if self.trunk_extra is not None:                 
+        #         trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
+        #         trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
+        #         trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
+        #     else:
+        #         trunk_output = self.trunk_svd(locations.view(-1, 1)) 
+        #     x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
+        #     u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
+        #     u_deltas = torch.cat((u, deltas), dim=-1)          
+        #     rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
-        
+        trunk_output = self.trunk(locations.view(-1, 1)) 
+
         ### Flow encoder ###
+        print(x.shape)
         h0 = self.x_dnn(x)
         if self.IC_encoder_decoder_enabled:
             x_repeated = x.repeat(1,self.control_rnn_depth)

@@ -29,14 +29,14 @@ hyperparams = {
     'decoder_depth': 2,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
     'trunk_size_extra':[50,50,50,50], # hidden size of the trunk modeled as extra layers
     'NL_size':[20,20,20,20], # hidden size of nonlinearity at end, only used if use_nonlinear is True
-    'trunk_modes':150,   # if bigger than state dim, second trunk_extra will be used
+    'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0005,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
@@ -45,7 +45,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'train_loss': "MSE_orthogonal",
+    'train_loss': "L1",
     'val_loss': "L1"
 }
 
@@ -193,57 +193,57 @@ def main():
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
-    ### Pretrain trunk if no pretrained trunk is given ###
-    if sys_args.pretrained_trunk == False:
-        print("No pretrained trunk model given, training trunk model...")
-        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
-        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
-        trunk_model.to(device)
-        trunk_model.train()
-        optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
-        PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
-        best_loss = 0.03
-        locations = data['Locations'].view(-1,1).to(device)
-        for epoch in range(0,200000):
+    # ### Pretrain trunk if no pretrained trunk is given ###
+    # if sys_args.pretrained_trunk == False:
+    #     print("No pretrained trunk model given, training trunk model...")
+    #     modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+    #     trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+    #     trunk_model.to(device)
+    #     trunk_model.train()
+    #     optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
+    #     PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
+    #     best_loss = 0.03
+    #     locations = data['Locations'].view(-1,1).to(device)
+    #     for epoch in range(0,200000):
         
-            optimizer.zero_grad()
-            PHI_pred = trunk_model(locations)
-            total, rec_loss, ortho_loss, norm_loss = total_loss(PHI, PHI_pred, alpha=1.0, beta=0.1)  # Get all losses
-            total.backward()
-            optimizer.step()
+    #         optimizer.zero_grad()
+    #         PHI_pred = trunk_model(locations)
+    #         total, rec_loss, ortho_loss, norm_loss = total_loss(PHI, PHI_pred, alpha=1.0, beta=0.1)  # Get all losses
+    #         total.backward()
+    #         optimizer.step()
 
-            # save the model
-            if total.item() < best_loss:
-                best_loss = total.item()
+    #         # save the model
+    #         if total.item() < best_loss:
+    #             best_loss = total.item()
                 
-                model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
+    #             model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
 
-                torch.save(trunk_model.state_dict(), f"{model_name}.pth")
-                artifact = wandb.Artifact(name=f"{model_name}", type="model")
-                artifact.add_file(f"{model_name}.pth")
-                wandb.log_artifact(artifact)
-                # print(f"Epoch {i+1}: Improved model saved! Total Loss: {total.item()}")
+    #             torch.save(trunk_model.state_dict(), f"{model_name}.pth")
+    #             artifact = wandb.Artifact(name=f"{model_name}", type="model")
+    #             artifact.add_file(f"{model_name}.pth")
+    #             wandb.log_artifact(artifact)
+    #             # print(f"Epoch {i+1}: Improved model saved! Total Loss: {total.item()}")
 
-            if epoch % 5000 == 0: 
-                print(f'epoch {epoch+1}, Total Loss {total.item()}, data Loss {rec_loss.item()}, ortho Loss {ortho_loss.item()}, norm Loss {norm_loss.item()}')
+    #         if epoch % 5000 == 0: 
+    #             print(f'epoch {epoch+1}, Total Loss {total.item()}, data Loss {rec_loss.item()}, ortho Loss {ortho_loss.item()}, norm Loss {norm_loss.item()}')
 
-            wandb.log({
-            'Trunk/epoch': epoch + 1,
-            'Trunk/Total_Loss': total.item(),
-            'Trunk/Data_Loss': rec_loss.item(),
-            'Trunk/Orthogonal_Loss': ortho_loss.item(),
-            'Trunk/Norm_Loss': norm_loss.item(),
-        })
+    #         wandb.log({
+    #         'Trunk/epoch': epoch + 1,
+    #         'Trunk/Total_Loss': total.item(),
+    #         'Trunk/Data_Loss': rec_loss.item(),
+    #         'Trunk/Orthogonal_Loss': ortho_loss.item(),
+    #         'Trunk/Norm_Loss': norm_loss.item(),
+    #     })
     
-    ### Use pretrained trunk model ###
-    else:
-        print("Using pretrained trunk model...")
-        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
-        trunk_path = Path(sys_args.pretrained_trunk)
-        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
-        trunk_model.load_state_dict(torch.load(trunk_path))
-        trunk_model.to(device)
-        trunk_model.train()  
+    # ### Use pretrained trunk model ###
+    # else:
+    #     print("Using pretrained trunk model...")
+    #     modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+    #     trunk_path = Path(sys_args.pretrained_trunk)
+    #     trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+    #     trunk_model.load_state_dict(torch.load(trunk_path))
+    #     trunk_model.to(device)
+    #     trunk_model.train()  
 
     model_args = {
         'state_dim': int(train_data.state_dim),
@@ -283,15 +283,16 @@ def main():
     with open(model_save_dir / "metadata.yaml", 'w') as f:
         yaml.dump(model_metadata, f)
 
-    model = CausalFlowModel(**model_args,trunk_model=trunk_model)
+    model = CausalFlowModel(**model_args,trunk_model=None)
     model.to(device)
 
     # Freeze the pretrained model 
-    for param in model.trunk_svd.parameters():
-        param.requires_grad = False
+    # for param in model.trunk_svd.parameters():
+    #     param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
-    optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
+    # optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
+    optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimiser,
@@ -332,11 +333,11 @@ def main():
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == wandb.config['unfreeze_epoch']:
-            print("Unfreezing the pretrained model's layers for fine-tuning...")
-            for param in trunk_model.parameters():
-                param.requires_grad = True
-                optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
+        # if epoch == wandb.config['unfreeze_epoch']:
+            # print("Unfreezing the pretrained model's layers for fine-tuning...")
+            # for param in trunk_model_svd.parameters():
+            #     param.requires_grad = True
+            # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
             train_step(example,data['Locations'],train_loss_fn, model, optimiser, device)
