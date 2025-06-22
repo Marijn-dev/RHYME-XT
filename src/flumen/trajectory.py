@@ -54,8 +54,8 @@ class RawTrajectoryDataset(Dataset):
                              size=self.state[-1].size()))
             
             # transform inputs
-            if self.input_mask is not None:
-                self.control_dim = sample['control'].shape[1]
+            # if self.input_mask is not None:
+            #     self.control_dim = sample['control'].shape[1]
 
             self.control_seq.append(
                 torch.from_numpy(sample['control']).type(
@@ -66,12 +66,13 @@ class RawTrajectoryDataset(Dataset):
                  noise_std):
 
         def get_example():
-            x0, t, y, u = generator.get_example(time_horizon, n_samples)
+            x0, t, y, u,full_state = generator.get_example(time_horizon, n_samples)
             return {
                 "init_state": x0,
                 "time": t,
                 "state": y,
                 "control": u,
+                "full_state": full_state
             }
 
         data = [get_example() for _ in range(n_trajectories)]

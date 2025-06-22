@@ -1,6 +1,7 @@
 ############ USES A PRETRAINED (ON SVD EXTRACTED BASIS MODES) TRUNK NET ############
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 torch.set_default_dtype(torch.float32)
@@ -11,40 +12,44 @@ from pathlib import Path
 from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
 from flumen.train import EarlyStopping, train_step, validate
 
+from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
 from argparse import ArgumentParser
 import time
+import matplotlib.pyplot as plt
 
 import wandb
 import os
 
 hyperparams = {
-    'control_rnn_size': 32,
-    'control_rnn_depth': 1,
-    'encoder_size': 1,
+    'control_rnn_size': 250,
+    'control_rnn_depth': 2,
+    'encoder_size': 2,
     'encoder_depth': 1,
-    'decoder_size': 1,
+    'decoder_size': 3,
     'decoder_depth': 1,
-    'batch_size': 256,
-    'use_POD':False,
-    'use_trunk':True,
-    'use_petrov_galerkin':False, ## if False -> inputs will be projected using same basis functions of trunk and POD
-    'trunk_epoch':0, ## From this epoch onwards, the trunk will be used for the input projection (when petrov = False) 
-    'use_fourier':False,
-    'use_conv_encoder':True,
-    'trunk_size':[100,100,100,100],
-    'POD_modes':50,
-    'trunk_modes':50,   
-    'fourier_modes':50,
-    'lr': 0.0005,
+    'batch_size': 64,
+    'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'regular':False, # True: standard flow model
+    'use_conv_encoder':False,
+    'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
+    'trunk_size_extra':[100,100,100,100], # hidden size of the trunk modeled as extra layers
+    'NL_size':[100,100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
+    'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
+    'lr': 0.0002,
+    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'loss': "l1_relative",
+    'train_loss': "L1",
+    'val_loss': "L1"
 }
 
-def l1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
+def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
     ### orthogonal loss
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     loss_fn_orth = torch.nn.L1Loss().to(device)
@@ -68,15 +73,88 @@ def L1_relative(y_true, y_pred):
     
     return relative_error
 
+def L1_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
+    '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
+    # data_loss = l1_loss_rejection
+    data_loss_v, _ = L1(y_true,y_pred,basis_functions)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
+
+    total_loss = data_loss_v + alfa * ortho_loss + beta * norm_loss
+    return total_loss, data_loss_v
+
+def MSE_orthogonal(y_true,y_pred,basis_functions,alfa=1,beta=0.1):
+    '''returns data loss y_true and y_pred and orthogonal loss of trunk'''
+    # data_loss = l1_loss_rejection
+    data_loss_v, _ = MSE(y_true,y_pred,basis_functions)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(basis_functions)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(basis_functions)  # Ensure unit norm
+
+    total_loss = data_loss_v + alfa * ortho_loss + beta * norm_loss
+    return total_loss, data_loss_v
+
+def orthogonality_loss(U):
+    loss_fn_orth = nn.L1Loss()
+    I = torch.eye(U.shape[1], device=U.device)  # Identity matrix
+    UTU = torch.matmul(U.T, U)  # Compute U^T 
+
+    return loss_fn_orth(UTU, I)  # Minimize deviation from I
+
+def unit_norm_loss(U):
+    norms = torch.norm(U, dim=0)  # Compute column-wise norms
+    loss_unit_norm = nn.L1Loss()
+    return loss_unit_norm(norms, torch.ones_like(norms))  # Penalize deviations from 1
+
+def total_loss(U_pred, U_true, alpha=1.0,beta=0.1):
+    data_loss = L1_relative(U_pred, U_true)  # Reconstruction loss
+    ortho_loss = orthogonality_loss(U_pred)  # Enforce U^T U = I
+    norm_loss = unit_norm_loss(U_pred)  # Ensure unit norm
+    total_loss = data_loss + alpha * ortho_loss + beta * norm_loss
+
+    return total_loss, data_loss, alpha * ortho_loss, beta*norm_loss
+
+def L1_loss_rejection(y_true,y_pred,basis_functions=0,num_samples=50):
+    '''samples points based on their magnitude, and then computes the L1 loss on the selected points'''
+    Loss = nn.L1Loss()
+    
+    magnitudes = torch.abs(y_true)
+    probs = magnitudes / (torch.sum(magnitudes,dim=1,keepdim=True)+ 1e-10)  # Normalize to get probabilities
+    probs = probs + 1e-5  # Avoid zero probabilities
+    indices = torch.stack([
+        torch.multinomial(probs[i], num_samples=num_samples, replacement=False)
+        for i in range(y_true.shape[0])
+    ])
+    batch_indices = torch.arange(y_true.shape[0]).unsqueeze(1)
+    y_true_sampled = y_true[batch_indices,indices]
+    y_pred_sampled = y_pred[batch_indices,indices]
+    Loss_v = Loss(y_true_sampled, y_pred_sampled)
+    return Loss_v, Loss_v
+
+def L1(y_true,y_pred,_):
+    Loss = nn.L1Loss()
+    Loss_v = Loss(y_true,y_pred)
+    return Loss_v, Loss_v
+
+def MSE(y_true,y_pred,_):
+    Loss = nn.MSELoss()
+    Loss_v = Loss(y_true,y_pred)
+    return Loss_v, Loss_v
+
 def get_loss(which):
-    if which == "mse":
-        return torch.nn.MSELoss()
-    elif which == "l1":
-        return torch.nn.L1Loss()
-    elif which == "l1_relative":
+    if which == "MSE":
+        return MSE
+    elif which == "L1":
+        return L1
+    elif which == "L1_relative":
         return L1_relative
-    elif which == "l1_relative_orthogonal_trunk":
-        return l1_relative_orthogonal_trunk
+    elif which == "L1_relative_orthogonal_trunk":
+        return L1_relative_orthogonal_trunk
+    elif which == "L1_loss_rejection":
+        return L1_loss_rejection
+    elif which == "L1_orthogonal":
+        return L1_orthogonal
+    elif which == "MSE_orthogonal":
+        return MSE_orthogonal
     else:
         raise ValueError(f"Unknown loss {which}.")
 
@@ -98,63 +176,95 @@ def main():
                     help="If reset_noise is set, set standard deviation ' \
                             'of the measurement noise to this value.")
 
+    ap.add_argument('--pretrained_trunk',
+                    type=str,
+                    default=False,
+                    help="Path to pretrained trunk model, if none is given the trunk will be trained before training the flow model.")
+    
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_galerkin', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_L1_sweep', name=sys_args.name, config=hyperparams)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    ## if conv is on, POD and fourier cant be on
-    if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
-        print("invalid combination, skip run")
-        return
-    
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"])
+    train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
     val_data = TrajectoryDataset(data["val"])
     test_data = TrajectoryDataset(data["test"])
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trunk_model = TrunkNet(in_size=1,out_size=50,hidden_size=[100,100,100,100],use_batch_norm=False)
-    trunk_model.load_state_dict(torch.load(Path(os.getcwd()+'/models_trunk/trunk_model.pth')))
-    trunk_model.to(device)
-    trunk_model.train()  
+    ### Pretrain trunk if no pretrained trunk is given ###
+    if sys_args.pretrained_trunk == False:
+        print("No pretrained trunk model given, training trunk model...")
+        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+        trunk_model.to(device)
+        trunk_model.train()
+        optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
+        PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
+        best_loss = 0.03
+        locations = data['Locations'].view(-1,1).to(device)
+        for epoch in range(0,200000):
+        
+            optimizer.zero_grad()
+            PHI_pred = trunk_model(locations)
+            total, rec_loss, ortho_loss, norm_loss = total_loss(PHI, PHI_pred, alpha=1.0, beta=0.1)  # Get all losses
+            total.backward()
+            optimizer.step()
+
+            # save the model
+            if total.item() < best_loss:
+                best_loss = total.item()
+                
+                model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
+
+                torch.save(trunk_model.state_dict(), f"{model_name}.pth")
+                artifact = wandb.Artifact(name=f"{model_name}", type="model")
+                artifact.add_file(f"{model_name}.pth")
+                wandb.log_artifact(artifact)
+                # print(f"Epoch {i+1}: Improved model saved! Total Loss: {total.item()}")
+
+            if epoch % 5000 == 0: 
+                print(f'epoch {epoch+1}, Total Loss {total.item()}, data Loss {rec_loss.item()}, ortho Loss {ortho_loss.item()}, norm Loss {norm_loss.item()}')
+
+            wandb.log({
+            'Trunk/epoch': epoch + 1,
+            'Trunk/Total_Loss': total.item(),
+            'Trunk/Data_Loss': rec_loss.item(),
+            'Trunk/Orthogonal_Loss': ortho_loss.item(),
+            'Trunk/Norm_Loss': norm_loss.item(),
+        })
+    
+    ### Use pretrained trunk model ###
+    else:
+        print("Using pretrained trunk model...")
+        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        trunk_path = Path(sys_args.pretrained_trunk)
+        trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+        trunk_model.load_state_dict(torch.load(trunk_path))
+        trunk_model.to(device)
+        trunk_model.train()  
 
     model_args = {
-        'state_dim': train_data.state_dim,
-        'control_dim': train_data.control_dim,
-        'output_dim': train_data.output_dim,
+        'state_dim': int(train_data.state_dim),
+        'control_dim': int(train_data.control_dim),
+        'output_dim': int(train_data.output_dim),
         'control_rnn_size': wandb.config['control_rnn_size'],
         'control_rnn_depth': wandb.config['control_rnn_depth'],
         'encoder_size': wandb.config['encoder_size'],
         'encoder_depth': wandb.config['encoder_depth'],
         'decoder_size': wandb.config['decoder_size'],
         'decoder_depth': wandb.config['decoder_depth'],
-        'use_POD': wandb.config['use_POD'],
-        'use_trunk': wandb.config['use_trunk'],
-        'use_petrov_galerkin': wandb.config['use_petrov_galerkin'],
-        'use_fourier':wandb.config['use_fourier'],
+        'use_nonlinear': wandb.config['use_nonlinear'],
+        'IC_encoder_decoder':wandb.config['IC_encoder_decoder'],
+        'regular': wandb.config['regular'],
         'use_conv_encoder':wandb.config['use_conv_encoder'],
-        'trunk_size': wandb.config['trunk_size'],
-        'POD_modes':wandb.config['POD_modes'],
+        'trunk_size_svd': wandb.config['trunk_size_svd'],
+        'trunk_size_extra': wandb.config['trunk_size_extra'],
         'trunk_modes':wandb.config['trunk_modes'],
-        'fourier_modes':wandb.config['fourier_modes'],
-        'trunk_epoch':wandb.config['trunk_epoch'], 
+        'NL_size':wandb.config['NL_size'],
         'use_batch_norm': False,
     }
-
-    run_id = ""
-    run_id += f"Petrov_galerkin_{model_args['use_petrov_galerkin']}_"
-    if model_args['use_fourier']:
-        run_id += f"Fourier_Modes_{model_args['fourier_modes']}_" 
-    if model_args['use_trunk']: 
-        run_id += f"Trunk_Modes_{model_args['trunk_modes']}_" 
-    if model_args['use_POD']: 
-        run_id += f"POD_Modes_{model_args['POD_modes']}_" 
-    if model_args['use_conv_encoder']: 
-        run_id += f"CONV"     
-    if model_args['use_POD'] == False and model_args['use_fourier'] == False and model_args['use_trunk'] == False and model_args['use_conv_encoder']:  
-        run_id += "Regular"  
 
     model_metadata = {
         'args': model_args,
@@ -162,11 +272,11 @@ def main():
         'data_settings': data["settings"],
         'data_args': data["args"]
     }
-    model_name = f"flow_model-{data_path.stem}-{sys_args.name}-{run_id}"
+    model_name = f"flow_model-{data_path.stem}-{sys_args.name}"
 
     # Prepare for saving the model
     model_save_dir = Path(
-        f"./outputs/{sys_args.name}/{sys_args.name}_{run_id}")
+        f"./outputs/{sys_args.name}/{sys_args.name}")
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Save local copy of metadata
@@ -177,7 +287,7 @@ def main():
     model.to(device)
 
     # Freeze the pretrained model 
-    for param in trunk_model.parameters():
+    for param in model.trunk_svd.parameters():
         param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
@@ -189,7 +299,8 @@ def main():
         cooldown=0,
         factor=1. / wandb.config['sched_factor'])
 
-    loss = get_loss(wandb.config["loss"])
+    train_loss_fn = get_loss(wandb.config["train_loss"])
+    val_loss_fn = get_loss(wandb.config["val_loss"])
 
     early_stop = EarlyStopping(es_patience=wandb.config['es_patience'],
                                es_delta=wandb.config['es_delta'])
@@ -207,9 +318,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss = validate(train_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch=0)
-    test_loss = validate(test_dl,data['PHI'],data['Locations'],loss, model,device,epoch=0)
+    train_loss, train_loss_data = validate(train_dl,data['Locations'],train_loss_fn, model, device)
+    _, val_loss = validate(val_dl,data['Locations'],val_loss_fn, model, device)
+    _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model,device)
 
     early_stop.step(val_loss)
     print(
@@ -221,20 +332,20 @@ def main():
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
-        if epoch == 5:
+        if epoch == wandb.config['unfreeze_epoch']:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
-            for param in trunk_model.parameters():
+            for param in model.trunk_svd.parameters():
                 param.requires_grad = True
-                optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
+            optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
-            train_step(example, data['PHI'],data['Locations'],loss, model, optimiser, device,epoch)
+            train_step(example,data['Locations'],train_loss_fn, model, optimiser, device)
 
 
         model.eval()
-        train_loss = validate(train_dl,data['PHI'],data['Locations'], loss, model, device,epoch)
-        val_loss = validate(val_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
-        test_loss = validate(test_dl, data['PHI'],data['Locations'],loss, model, device,epoch)
+        train_loss, train_loss_data = validate(train_dl,data['Locations'], train_loss_fn, model, device)
+        _, val_loss = validate(val_dl, data['Locations'],val_loss_fn, model, device)
+        _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model, device)
 
         sched.step(val_loss)
         early_stop.step(val_loss)
@@ -248,18 +359,26 @@ def main():
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
-            run.summary["best_train"] = train_loss
-            run.summary["best_val"] = val_loss
-            run.summary["best_test"] = test_loss
-            run.summary["best_epoch"] = epoch + 1
+            run.summary["Flownet/best_train"] = train_loss
+            run.summary["Flownet/best_val"] = val_loss
+            run.summary["Flownet/best_test"] = test_loss
+            run.summary["Flownet/best_epoch"] = epoch + 1
+
+            ### Visualize trajectory in WB ###
+            y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=1) # delta is hardcoded
+            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
+            test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
+            fig = plot_space_time_flat_trajectory_V2(y,y_pred)
+            wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
 
         wandb.log({
-            'time': time.time() - start,
-            'epoch': epoch + 1,
-            'lr': sched.get_last_lr()[0],
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-            'test_loss': test_loss,
+            'Flownet/time': time.time() - start,
+            'Flownet/epoch': epoch + 1,
+            'Flownet/lr': sched.get_last_lr()[0],
+            'Flownet/train_loss': train_loss,
+            'Flownet/train_loss_data': train_loss_data,
+            'Flownet/val_loss': val_loss,
+            'Flownet/test_loss': test_loss,
         })
 
         if early_stop.early_stop:

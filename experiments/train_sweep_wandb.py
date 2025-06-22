@@ -42,12 +42,12 @@ def train_main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='flumen_spatial_sweep_v3', name=sys_args.name, config=wandb.config)
+    run = wandb.init(project='test_sweep', name=sys_args.name, config=wandb.config)
 
-    # if conv is on, POD and fourier cant be on
-    if wandb.config['use_conv_encoder'] == True and wandb.config['use_fourier'] == True:
-        print("invalid combination, skip run")
-        return
+    ## if conv is on, POD and fourier cant be on
+    # if wandb.config['use_conv_encoder'] == True and (wandb.config['use_POD'] == True or wandb.config['use_fourier'] == True):
+    #     print("invalid combination, skip run")
+    #     return
     
     with data_path.open('rb') as f:
         data = pickle.load(f)
@@ -237,6 +237,6 @@ if __name__ == '__main__':
     # Set the environment variable to disable flapping
     import os
     os.environ["WANDB_AGENT_DISABLE_FLAPPING"] = "True"
-    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_v3")
+    sweep_id = wandb.sweep(sweep_configuration, project="flumen_spatial_sweep_regular")
     # Step 5: Start the Sweep Agent
     wandb.agent(sweep_id, function=train_main)

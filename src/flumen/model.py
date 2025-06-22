@@ -56,17 +56,15 @@ class CausalFlowModel(nn.Module):
                  encoder_depth,
                  decoder_size,
                  decoder_depth,
-                 use_POD,
-                 use_trunk,
-                 use_petrov_galerkin,
-                 use_fourier,
+                 use_nonlinear,
+                 IC_encoder_decoder,
+                 regular,
                  use_conv_encoder,
-                 trunk_size,
-                 POD_modes,
+                 trunk_size_svd,
+                 trunk_size_extra,
+                 NL_size,
                  trunk_modes,
                  trunk_model,
-                 fourier_modes,
-                 trunk_epoch,
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
 
@@ -74,59 +72,18 @@ class CausalFlowModel(nn.Module):
         self.control_dim = control_dim
         self.output_dim = output_dim
         self.control_rnn_size = control_rnn_size
-        self.basis_function_modes = self.state_dim
-
-        self.POD_enabled = use_POD
-        self.POD_modes = POD_modes
-        
-        self.trunk_enabled = use_trunk
         self.trunk_modes = trunk_modes
-        self.trunk_size = trunk_size
-        self.trunk_epoch = trunk_epoch
-
-        self.fourier_enabled = use_fourier
-        self.fourier_modes = fourier_modes
-
+        self.trunk_size_svd = trunk_size_svd
+        self.trunk_size_extra = trunk_size_extra
+        self.NL_size = NL_size
         self.conv_encoder_enabled = use_conv_encoder
-
-        self.petrov_galerkin_enabled = use_petrov_galerkin # whether to use galerkin or standard galerkin
-        self.projection = (self.POD_enabled or self.trunk_enabled) and self.petrov_galerkin_enabled == False
-
-        if self.POD_enabled:
-            self.POD_modes = min(self.POD_modes,self.state_dim) # cant be higher than state dimension
-            self.basis_function_modes = self.POD_modes  
-            self.out_size_decoder = self.basis_function_modes
-
-            # petrov galerkin -> use different basis functions for branch and trunk
-            if self.petrov_galerkin_enabled:
-                self.in_size_encoder = self.control_dim = self.state_dim
-            
-            # standard galerkin -> same basis functions for branch and trunk
-            else:
-                self.in_size_encoder = self.control_dim = self.basis_function_modes
-
-        elif self.trunk_enabled:
-            self.basis_function_modes = self.trunk_modes  
-            self.out_size_decoder = self.basis_function_modes
-
-            # petrov galerkin -> use different basis functions for branch and trunk
-            if self.petrov_galerkin_enabled:
-                self.in_size_encoder = self.control_dim = self.state_dim
-
-            # standard galerkin -> same basis functions for branch and trunk
-            else:
-                self.in_size_encoder = self.control_dim = self.basis_function_modes
-                
-
-        else:
-            self.in_size_encoder = self.control_dim = self.state_dim
-            self.out_size_decoder = self.output_dim
-            
-
-        if self.fourier_enabled:
-            self.fourier_modes = min(self.fourier_modes, self.basis_function_modes // 2)
-            self.in_size_encoder = self.control_dim = self.fourier_modes * 2
-
+        self.nonlinear_enabled = use_nonlinear 
+        self.IC_encoder_decoder_enabled = IC_encoder_decoder
+        self.regular_enabled = regular
+        self.basis_function_modes = self.trunk_modes  
+        self.out_size_decoder = self.basis_function_modes
+        self.in_size_encoder = self.control_dim = self.basis_function_modes
+        self.control_rnn_depth = control_rnn_depth
 
         self.u_rnn = torch.nn.LSTM(
             input_size=1 + self.control_dim,
@@ -136,14 +93,26 @@ class CausalFlowModel(nn.Module):
             dropout=0,
         )
 
-        x_dnn_osz = control_rnn_depth * control_rnn_size
-
-        # Flow encoder (CNN)
+        ### Enforce IC ###
+        if self.IC_encoder_decoder_enabled:
+            assert control_rnn_size > self.trunk_modes, "Control RNN size must be greater than trunk modes"	
+            x_dnn_osz = control_rnn_depth * (control_rnn_size-self.trunk_modes)
+        else: 
+            x_dnn_osz = control_rnn_depth * control_rnn_size
+            
+            ### Flow decoder (MLP) ###
+            self.u_dnn = FFNet(in_size=control_rnn_size,
+                            out_size=self.out_size_decoder,
+                            hidden_size=decoder_depth *
+                            (decoder_size * control_rnn_size, ),
+                            use_batch_norm=use_batch_norm)
+        
+        ### Flow encoder (CNN) ###
         if self.conv_encoder_enabled:
             self.x_dnn = CNN_encoder(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,use_batch_norm=use_batch_norm)
             
-        # Flow encoder (MLP)
+        ### Flow encoder (MLP) ###
         else:
             self.x_dnn = FFNet(in_size=self.in_size_encoder,
                            out_size=x_dnn_osz,
@@ -151,84 +120,74 @@ class CausalFlowModel(nn.Module):
                            (encoder_size * x_dnn_osz, ), 
                            use_batch_norm=use_batch_norm)
 
-        # Flow decoder
-        u_dnn_isz = control_rnn_size
-        self.u_dnn = FFNet(in_size=u_dnn_isz,
-                           out_size=self.out_size_decoder,
-                           hidden_size=decoder_depth *
-                           (decoder_size * u_dnn_isz, ),
-                           use_batch_norm=use_batch_norm)
+        ### Trunk (MLP) ###
+        self.trunk_svd = trunk_model # Trained on SVD
+        if trunk_modes > state_dim:
+            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
+        else: 
+            self.trunk_extra = None
+
+        ### Nonlinear decoder (MLP) ###
+        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
+
+    def forward(self, x, rnn_input,locations, deltas):
+
+        ### Projection ###
+        if self.regular_enabled == False:
+            unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
+            u = unpadded_u[:, :, :-1]                                                           # extract inputs values
+            if self.trunk_extra is not None:                 
+                trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
+                trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
+                trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
+            else:
+                trunk_output = self.trunk_svd(locations.view(-1, 1)) 
+            x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
+            u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
+            u_deltas = torch.cat((u, deltas), dim=-1)          
+            rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
+
         
-        # Trunk network
-        if self.trunk_enabled:
-            self.trunk = trunk_model
-
-        self.output_NN = FFNet(in_size=self.basis_function_modes,out_size = 1,hidden_size=[100,100],use_batch_norm=use_batch_norm)
-
-    def forward(self, x, rnn_input,PHI,locations, deltas,epoch):
-        unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True) # unpack input
-        u = unpadded_u[:, :, :-1]                                         # extract inputs values
-       
-        basis_functions_input = 0
-        basis_functions_output = 0
-        # POD basis functions
-        if self.POD_enabled:
-            basis_functions_input += PHI[:, :self.basis_function_modes]
-            basis_functions_output += PHI[:, :self.basis_function_modes]
-
-        # Trunk MLP basis functions
-        if self.trunk_enabled:
-            trunk_output = self.trunk(locations.view(-1, 1))  
-            basis_functions_output +=  trunk_output
-            if epoch >= self.trunk_epoch: # use trunk basis functions for input projection as well
-                basis_functions_input += trunk_output
-            elif self.POD_enabled == False:
-                basis_functions_input = PHI[:, :self.basis_function_modes]
-        
-        # if normal galerkin -> project the inputs
-        if self.projection:
-            x = torch.einsum("ni,bn->bi",basis_functions_input,x) 
-            u = torch.einsum('ni,btn->bti',basis_functions_input,u) 
-
-        if self.fourier_enabled:
-            x_fft = torch.fft.rfft(x) 
-            x_fft = x_fft[:,:self.fourier_modes] # retain only self.fourier_modes
-            x = torch.cat([x_fft.real, x_fft.imag],dim=-1) # concatenate real and imag coefficients
-
-            u_fft = torch.fft.rfft(u, dim=-1)  
-            u_fft = u_fft[:,:,:self.fourier_modes]
-            u = torch.cat([u_fft.real, u_fft.imag], dim=-1) 
-
-        # repack input
-        u_deltas = torch.cat((u, deltas), dim=-1)          
-        rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)
-
-
+        ### Flow encoder ###
         h0 = self.x_dnn(x)
-        h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
+        if self.IC_encoder_decoder_enabled:
+            x_repeated = x.repeat(1,self.control_rnn_depth)
+            x_chunks = torch.chunk(x_repeated,chunks=self.control_rnn_depth, dim=1)
+            enc_chunks = torch.chunk(h0, chunks=self.control_rnn_depth, dim=1)
+            h0 = [torch.cat([b_part, a_part], dim=1) for b_part, a_part in zip(x_chunks, enc_chunks)]
+            h0 = torch.stack(h0)
+        else:
+            h0 = torch.stack(h0.split(self.control_rnn_size, dim=1))
         c0 = torch.zeros_like(h0)
 
+        ### Flow RNN ###
         rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
         h_shift = torch.roll(h, shifts=1, dims=1)
         h_shift[:, 0, :] = h0[-1]
         encoded_controls = (1 - deltas) * h_shift + deltas * h
-     
-        output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
+
+        ### Flow decoder ###
+        if self.IC_encoder_decoder_enabled:
+            output_flow = encoded_controls[range(encoded_controls.shape[0]),
+                                             h_lens - 1, :][:,:self.trunk_modes]
+                     
+        else:
+            output_flow = self.u_dnn(encoded_controls[range(encoded_controls.shape[0]),
                                              h_lens - 1, :])
         
-        # Regular
-        if self.POD_enabled == False and self.trunk_enabled == False:
-            output = output_flow
-        
-        # Inner product
-        else:
-            output = torch.einsum("ni,bi->bni",basis_functions_output,output_flow)
+        ### Nonlinearity ###
+        if self.nonlinear_enabled:
+            output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output)
             output = output.view(batch_size,-1)
-        return output
+
+        ### Inner product ###
+        else: 
+            output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
+        return output, trunk_output
 
 ## MLP
 class FFNet(nn.Module):
@@ -259,7 +218,7 @@ class FFNet(nn.Module):
                 self.layers.append(nn.BatchNorm1d(osz))
 
             self.layers.append(activation())
-            self.layers.append(nn.Dropout(0.2))  # Dropout layer
+            self.layers.append(nn.Dropout(0.1))  # Dropout layer
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
@@ -275,8 +234,13 @@ class TrunkNet(nn.Module):
                  out_size,
                  hidden_size,
                  use_batch_norm,
+                 dropout_prob=0.0,
                  activation=nn.Tanh):
         super(TrunkNet, self).__init__()
+
+       
+        B = torch.normal(mean=0.0, std=100, size=(128, 1))
+        self.register_buffer("B", B)  
 
         self.layers = nn.ModuleList()
         self.layers.append(nn.Linear(in_size, hidden_size[0]))
@@ -285,6 +249,9 @@ class TrunkNet(nn.Module):
         if use_batch_norm:
             self.layers.append(nn.BatchNorm1d(hidden_size[0]))
 
+        if dropout_prob > 0:
+            self.layers.append(nn.Dropout(dropout_prob))
+
         for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
             self.layers.append(nn.Linear(isz, osz))
             self.layers.append(activation())
@@ -292,14 +259,19 @@ class TrunkNet(nn.Module):
 
             if use_batch_norm:
                 self.layers.append(nn.BatchNorm1d(osz))
+            if dropout_prob > 0:
+                self.layers.append(nn.Dropout(dropout_prob))
 
 
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
     def forward(self, input):
+        input_proj = 2 * torch.pi * input @ self.B.T
+        input = torch.cat([torch.sin(input_proj), torch.cos(input_proj)], dim=-1)
         for layer in self.layers:
             input = layer(input)
         return input
+
 
 
 class DynamicPoolingCNN(nn.Module):
