@@ -35,7 +35,7 @@ class DeepONet(nn.Module):
         self.trunk_svd = trunk_model
 
         if self.nonlinear_enabled:
-            self.output_NN = FFNet(in_size=trunk_modes*2,out_size = output_dim,hidden_size=NL_size,use_batch_norm=use_batch_norm)
+            self.output_NN = FFNet(in_size=trunk_modes*2,out_size = 1,hidden_size=NL_size,use_batch_norm=use_batch_norm)
 
     def forward(self, x, u,locations):
         branch_IC_out = self.branch_IC(x)
@@ -47,11 +47,13 @@ class DeepONet(nn.Module):
             trunk_FF = torch.einsum("ni,i->ni",trunk_output,branch_FF_out)
             output = torch.cat([trunk_IC, trunk_FF], dim=1)  
             output = self.output_NN(output)
+            output = output.view(output.shape[0])  # Flatten the output
 
         else:
             trunk_IC = torch.einsum("ni,i->n",trunk_output,branch_IC_out)
             trunk_FF = torch.einsum("ni,i->n",trunk_output,branch_FF_out)
             output = trunk_IC + trunk_FF
+            
         return output, trunk_output
 
 class CausalFlowModel(nn.Module):
