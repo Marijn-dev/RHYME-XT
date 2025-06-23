@@ -111,7 +111,8 @@ class TrajectoryDataset(Dataset):
         state = []
         rnn_input_data = []
         seq_len_data = []
-
+        time_start = []
+        time_end = []
         rng = np.random.default_rng()
 
         k_tr = 0
@@ -119,15 +120,16 @@ class TrajectoryDataset(Dataset):
         for (x0, x0_n, t, y, y_n, u) in raw_data:
             y += y_n
             x0 += x0_n
-
             if max_seq_len == -1:
                 for k_s, y_s in enumerate(y):
-                    rnn_input, rnn_input_len = self.process_example(
+                    rnn_input, rnn_input_len, t_end, t_start = self.process_example(
                         0, k_s, t, u, self.delta)
 
                     s = y_s.view(1, -1)[:, mask].reshape(-1)
 
                     init_state.append(x0)
+                    time_start.append(t_start)
+                    time_end.append(t_end)
                     state.append(s)
                     seq_len_data.append(rnn_input_len)
                     rnn_input_data.append(rnn_input)
@@ -137,24 +139,27 @@ class TrajectoryDataset(Dataset):
                     # find index of last relevant state sample
                     times = (t - t[k_s] - max_seq_len * self.delta)
                     times[times > 0] = 0.
-                    k_l = times.argmax().item()
 
+                    k_l = times.argmax().item()
                     if k_l == k_s:
                         end_idxs = (0, )
                     else:
                         end_idxs = rng.choice(k_l - k_s,
                                               size=min(n_samples, k_l - k_s),
                                               replace=False)
-
                     for k_e in end_idxs:
-                        rnn_input, rnn_input_len = self.process_example(
+                        rnn_input, rnn_input_len, t_end, t_start = self.process_example(
                             k_s, k_s + k_e, t, u, self.delta)
 
                         init_state.append(y_s)
+                        time_start.append(t_start)
+                        time_end.append(t_end)
                         state.append(y[k_s + k_e, mask])
                         seq_len_data.append(rnn_input_len)
                         rnn_input_data.append(rnn_input)
 
+        self.time_start = torch.tensor(time_start, dtype=torch.get_default_dtype())
+        self.time_end = torch.tensor(time_end, dtype= torch.get_default_dtype())
         self.init_state = torch.stack(init_state).type(
             torch.get_default_dtype())
         self.state = torch.stack(state).type(torch.get_default_dtype())
@@ -178,7 +183,7 @@ class TrajectoryDataset(Dataset):
         deltas = torch.ones((u_seq.shape[0], 1))
         t_u_end = init_time + delta * u_end_idx
         t_u_start = init_time + delta * u_start_idx
-
+        
         if u_sz > 1:
             deltas[0] = (1. - (t[start_idx] - t_u_start) / delta).item()
             deltas[u_sz - 1] = ((t[end_idx] - t_u_end) / delta).item()
@@ -189,11 +194,11 @@ class TrajectoryDataset(Dataset):
 
         rnn_input = torch.hstack((u_seq, deltas))
 
-        return rnn_input, u_sz
+        return rnn_input, u_sz, t[end_idx], t[start_idx] 
 
     def __len__(self):
         return self.len
 
     def __getitem__(self, index):
         return (self.init_state[index], self.state[index],
-                self.rnn_input[index], self.seq_lens[index])
+                self.rnn_input[index], self.seq_lens[index],self.time_start[index], self.time_end[index])

@@ -213,7 +213,7 @@ def trajectory(data,trajectory_index,delta):
                                                    lengths,
                                                    batch_first=True,
                                                    enforce_sorted=True)
-    return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+    return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1),lengths,rnn_inputs
 
 def plot_slider_1d(t,y,inputs,locations):
     """
