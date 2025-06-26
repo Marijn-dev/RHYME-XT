@@ -22,7 +22,7 @@ import os
 
 hyperparams = {
     'control_rnn_size': 250,
-    'control_rnn_depth': 2,
+    'control_rnn_depth': 1,
     'encoder_size': 2,
     'encoder_depth': 1,
     'decoder_size': 3,
@@ -38,7 +38,7 @@ hyperparams = {
     'NL_size':[100,100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0002,
-    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
