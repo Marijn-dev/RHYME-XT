@@ -90,18 +90,23 @@ class CausalFlowModel(nn.Module):
         ### Nonlinear decoder (MLP) ###
         self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
-    def forward(self, x, rnn_input,locations, deltas):
+    def forward(self, x, rnn_input,locations, deltas,basis_functions=None):
+        print('test')
+        if basis_functions is not None:
+            trunk_output_svd = basis_functions
+            print('using input basis functions')
+        else:
+            trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
 
         ### Projection ###
         if self.regular_enabled == False:
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
             u = unpadded_u[:, :, :-1]                                                           # extract inputs values
             if self.trunk_extra is not None:                 
-                trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
                 trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
                 trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
             else:
-                trunk_output = self.trunk_svd(locations.view(-1, 1)) 
+                trunk_output = trunk_output_svd 
             x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
             u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          
