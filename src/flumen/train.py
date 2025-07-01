@@ -41,11 +41,11 @@ def validate(data,locations,loss_fn, model, device):
 
 
 def train_step(example,locations, loss_fn, model, optimizer, device):
-    x0, y, u, deltas = prep_inputs(*example, device)
+    x0, y, u, deltas,basis_functions,kernel_pars = prep_inputs(*example, device)
 
     optimizer.zero_grad()
 
-    y_pred, basis_functions = model(x0, u,locations.to(device),deltas)
+    y_pred, basis_functions = model(x0, u,locations.to(device),deltas,basis_functions)
     total_loss, _ = loss_fn(y, y_pred,basis_functions)
 
     total_loss.backward()
