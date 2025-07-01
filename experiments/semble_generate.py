@@ -68,8 +68,8 @@ def get_postprocess(dynamics: str):
 
 def max_normalization(data):
     '''Cut off values above 1.0'''
-    for y in data.state:
-        y = torch.clamp(y,max=1.0)
+    for (k,y) in enumerate(data.state):
+        data.state[k] = torch.clamp(data.state[k],max=1.0)
 
 def rejection_sampling_single_neuron(data):
     for (k, y) in enumerate(data.state):
