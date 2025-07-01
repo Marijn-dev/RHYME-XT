@@ -35,6 +35,8 @@ class RawTrajectoryDataset(Dataset):
         self.state = []
         self.state_noise = []
         self.control_seq = []
+        self.PHI = []
+        self.kernel_pars = []
 
         for k, sample in enumerate(data):
             self.init_state[k] = torch.from_numpy(sample["init_state"].reshape(
@@ -47,6 +49,13 @@ class RawTrajectoryDataset(Dataset):
             self.state.append(
                 torch.from_numpy(sample["state"]).type(
                     torch.get_default_dtype()).reshape((-1, self.state_dim)))
+            
+            self.PHI.append(
+                sample["PHI"].to(dtype=torch.get_default_dtype()).reshape(-1, self.state_dim))
+            
+            self.kernel_pars.append(
+                torch.from_numpy(sample["kernel_pars"]).type(
+                    torch.get_default_dtype()).reshape((-1)))
 
             self.state_noise.append(
                 torch.normal(mean=0.,
@@ -89,8 +98,9 @@ class RawTrajectoryDataset(Dataset):
 
     def __getitem__(self, index):
         return (self.init_state[index], self.init_state_noise[index],
-                self.time[index], self.state[index], self.state_noise[index],
-                self.control_seq[index])
+                self.time[index], self.state[index], 
+                self.state_noise[index], self.control_seq[index],
+                self.PHI[index],self.kernel_pars[index])
 
 
 class TrajectoryDataset(Dataset):
@@ -111,12 +121,14 @@ class TrajectoryDataset(Dataset):
         state = []
         rnn_input_data = []
         seq_len_data = []
+        basis_functions = []
+        kernel_pars = []
 
         rng = np.random.default_rng()
 
         k_tr = 0
 
-        for (x0, x0_n, t, y, y_n, u) in raw_data:
+        for (x0, x0_n, t, y, y_n, u,phi,kernel) in raw_data:
             y += y_n
             x0 += x0_n
 
@@ -131,6 +143,8 @@ class TrajectoryDataset(Dataset):
                     state.append(s)
                     seq_len_data.append(rnn_input_len)
                     rnn_input_data.append(rnn_input)
+                    basis_functions.append(phi)
+                    kernel_pars.append(kernel)
 
             else:
                 for k_s, y_s in enumerate(y):
@@ -142,6 +156,8 @@ class TrajectoryDataset(Dataset):
                     if k_l == k_s:
                         end_idxs = (0, )
                     else:
+                        if k_l - k_s < 0:
+                            print("k_l:", k_l, "k_s:", k_s, "t:", t, "t[k_s]",t[k_s])
                         end_idxs = rng.choice(k_l - k_s,
                                               size=min(n_samples, k_l - k_s),
                                               replace=False)
@@ -154,10 +170,15 @@ class TrajectoryDataset(Dataset):
                         state.append(y[k_s + k_e, mask])
                         seq_len_data.append(rnn_input_len)
                         rnn_input_data.append(rnn_input)
+                        basis_functions.append(phi)
+                        kernel_pars.append(kernel)
+
 
         self.init_state = torch.stack(init_state).type(
             torch.get_default_dtype())
         self.state = torch.stack(state).type(torch.get_default_dtype())
+        self.basis_functions = torch.stack(basis_functions).type(torch.get_default_dtype())
+        self.kernel_pars = torch.stack(kernel_pars).type(torch.get_default_dtype())
         self.rnn_input = torch.stack(rnn_input_data).type(
             torch.get_default_dtype())
         self.seq_lens = torch.tensor(seq_len_data, dtype=torch.long)
@@ -196,4 +217,5 @@ class TrajectoryDataset(Dataset):
 
     def __getitem__(self, index):
         return (self.init_state[index], self.state[index],
-                self.rnn_input[index], self.seq_lens[index])
+                self.rnn_input[index], self.seq_lens[index],
+                self.basis_functions[index], self.kernel_pars[index])
