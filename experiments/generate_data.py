@@ -77,7 +77,6 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     def get_example():
         x0, t, y, u, y_full = trajectory_sampler.get_example(args.time_horizon,
                                                      args.n_samples)
-        
         return {
             "init_state": x0,
             "time": t,
@@ -85,20 +84,86 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             "control": u,
             "full_state": y_full
         }
+    
+    samples_per_kernel = 10
+    assert n_train % samples_per_kernel == 0, "n_train must be divisible by samples_per_kernel"
+    assert n_val % samples_per_kernel == 0, "n_val must be divisible by samples_per_kernel"
+    assert n_test % samples_per_kernel == 0, "n_test must be divisible by samples_per_kernel"
 
-    train_data = [get_example() for _ in range(n_train)]
+    train_data = []
+    full_state_kernel = []
+    # Collect data
+    for i in range(1,n_train+1):
+        example = get_example()
+        train_data.append(example)
+        full_state_kernel.append(example["full_state"])
+
+        # sample new kernel parameters every `samples_per_kernel` samples
+        if i % samples_per_kernel == 0:
+            print(i)
+            states_combined = torch.cat([
+            torch.tensor(full_state, dtype=torch.get_default_dtype())
+            for full_state in full_state_kernel
+            ], dim=0)
+            PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False) # calculate spatial basis functions for current kernel parameters
+
+            # add PHI and kernel parameters to example
+            for j in range(samples_per_kernel):
+                train_data[-samples_per_kernel + j]["PHI"] = PHI
+                train_data[-samples_per_kernel + j]["kernel_pars"] = np.array(trajectory_sampler._dyn.kernel_pars)
+
+            full_state_kernel = [] # reset for next kernel
+            trajectory_sampler.reset_kernel() # reset kernel parameters for next samples
+
     trajectory_sampler.reset_rngs()
 
-    val_data = [get_example() for _ in range(n_val)]
+    val_data = []
+    full_state_kernel = []
+    for i in range(1,n_val+1):
+        example = get_example()
+        val_data.append(example)
+        full_state_kernel.append(example["full_state"])
+
+        # sample new kernel parameters every `samples_per_kernel` samples
+        if i % samples_per_kernel == 0:
+            states_combined = torch.cat([
+            torch.tensor(full_state, dtype=torch.get_default_dtype())
+            for full_state in full_state_kernel
+            ], dim=0)
+            PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False) # calculate spatial basis functions for current kernel parameters
+            
+            # add PHI and kernel parameters to example
+            for j in range(samples_per_kernel):
+                val_data[-samples_per_kernel + j]["PHI"] = PHI
+                val_data[-samples_per_kernel + j]["kernel_pars"] = np.array(trajectory_sampler._dyn.kernel_pars)
+
+            full_state_kernel = [] # reset for next kernel
+            trajectory_sampler.reset_kernel() # reset kernel parameters for next samples
+
     trajectory_sampler.reset_rngs()
 
-    test_data = [get_example() for _ in range(n_test)]
+    test_data = []
+    full_state_kernel = []
+    for i in range(1,n_test+1):
+        example = get_example()
+        test_data.append(example)
+        full_state_kernel.append(example["full_state"])
 
-    states_combined = torch.cat([
-    torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
-    for d in train_data
-    ], dim=0)
-    PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
+        # sample new kernel parameters every `samples_per_kernel` samples
+        if i % samples_per_kernel == 0:
+            states_combined = torch.cat([
+            torch.tensor(full_state, dtype=torch.get_default_dtype())
+            for full_state in full_state_kernel
+            ], dim=0)
+            PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False) # calculate spatial basis functions for current kernel parameters
+            
+            # add PHI and kernel parameters to example
+            for j in range(samples_per_kernel):
+                test_data[-samples_per_kernel + j]["PHI"] = PHI
+                test_data[-samples_per_kernel + j]["kernel_pars"] = np.array(trajectory_sampler._dyn.kernel_pars)
+
+            full_state_kernel = [] # reset for next kernel
+            trajectory_sampler.reset_kernel() # reset kernel parameters for next samples
 
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
@@ -106,6 +171,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
                                       output_mask=trajectory_sampler._dyn.mask,
                                       input_mask=trajectory_sampler._dyn.input_mask,
                                       noise_std=args.noise_std)
+    
 
     val_data = RawTrajectoryDataset(val_data,
                                     *trajectory_sampler.dims(),
@@ -125,7 +191,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
             
-    return train_data, val_data, test_data, PHI, SIGMA
+    return train_data, val_data, test_data
 
 
 def make_trajectory_sampler(settings):

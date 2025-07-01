@@ -20,7 +20,7 @@ def main():
     postprocess = get_postprocess(settings["dynamics"]["name"])
     
     # PHI is U of SVD of concatenated train_data trajectories
-    train_data, val_data, test_data,PHI,SIGMA = generate(args,
+    train_data, val_data, test_data = generate(args,
                                                sampler,
                                                postprocess=postprocess) 
     
@@ -31,8 +31,6 @@ def main():
         "test": test_data,
         "settings": settings,
         "args": vars(args),
-        "PHI":PHI,
-        "SIGMA": SIGMA,
         "Locations":  locations,
     }
 
@@ -58,11 +56,20 @@ def get_postprocess(dynamics: str):
     #     return [
     #         rejection_sampling_n_neuron,
     #     ]
+    elif dynamics.startswith("LIFBrian2"):
+        return [
+            max_normalization,
+        ]
     elif dynamics == "Heat":
         return [
             min_max_normalization,
         ]
     return []
+
+def max_normalization(data):
+    '''Cut off values above 1.0'''
+    for y in data.state:
+        y = torch.clamp(y,max=1.0)
 
 def rejection_sampling_single_neuron(data):
     for (k, y) in enumerate(data.state):
