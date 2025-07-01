@@ -85,7 +85,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             "full_state": y_full
         }
     
-    samples_per_kernel = 10
+    samples_per_kernel = 100
     assert n_train % samples_per_kernel == 0, "n_train must be divisible by samples_per_kernel"
     assert n_val % samples_per_kernel == 0, "n_val must be divisible by samples_per_kernel"
     assert n_test % samples_per_kernel == 0, "n_test must be divisible by samples_per_kernel"

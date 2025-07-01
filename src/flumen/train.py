@@ -1,12 +1,14 @@
 import torch
 
 
-def prep_inputs(x0, y, u, lengths, device):
+def prep_inputs(x0, y, u, lengths, basis_functions, kernel_pars, device):
     sort_idxs = torch.argsort(lengths, descending=True)
     x0 = x0[sort_idxs]
     y = y[sort_idxs]
     u = u[sort_idxs]
     lengths = lengths[sort_idxs]
+    basis_functions = basis_functions[sort_idxs]
+    kernel_pars = kernel_pars[sort_idxs]
 
     deltas = u[:, :lengths[0], -1].unsqueeze(-1)
 
@@ -19,8 +21,10 @@ def prep_inputs(x0, y, u, lengths, device):
     y = y.to(device)
     u = u.to(device)
     deltas = deltas.to(device)
+    basis_functions = basis_functions.to(device)
+    kernel_pars = kernel_pars.to(device)
 
-    return x0, y, u, deltas
+    return x0, y, u, deltas, basis_functions, kernel_pars
 
 
 def validate(data,locations,loss_fn, model, device):
@@ -28,8 +32,8 @@ def validate(data,locations,loss_fn, model, device):
     data_loss_total = 0.
     with torch.no_grad():
         for example in data:
-            x0, y, u, deltas = prep_inputs(*example, device)
-            y_pred, basis_functions = model(x0, u, locations.to(device),deltas)
+            x0, y, u, deltas,basis_functions,kernel_pars = prep_inputs(*example, device)
+            y_pred, basis_functions = model(x0, u, locations.to(device),deltas,basis_functions)
             total_loss, data_loss = loss_fn(y, y_pred,basis_functions)
             vl += total_loss.item()
             data_loss_total += data_loss.item() 

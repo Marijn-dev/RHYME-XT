@@ -45,7 +45,7 @@ class CausalFlowModel(nn.Module):
         self.in_size_encoder = self.control_dim = self.basis_function_modes
         self.control_rnn_depth = control_rnn_depth
 
-        self.u_rnn = torch.nn.RNN(
+        self.u_rnn = torch.nn.LSTM(
             input_size=1 + self.control_dim,
             hidden_size=control_rnn_size,
             batch_first=True,
@@ -91,10 +91,9 @@ class CausalFlowModel(nn.Module):
         self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
     def forward(self, x, rnn_input,locations, deltas,basis_functions=None):
-        print('test')
+        
         if basis_functions is not None:
             trunk_output_svd = basis_functions
-            print('using input basis functions')
         else:
             trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
 
@@ -107,8 +106,8 @@ class CausalFlowModel(nn.Module):
                 trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
             else:
                 trunk_output = trunk_output_svd 
-            x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
-            u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
+            x = torch.einsum("bni,bn->bi",trunk_output,x) # a(0)
+            u = torch.einsum("bni,btn->bti",trunk_output,u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          
             rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
@@ -126,7 +125,7 @@ class CausalFlowModel(nn.Module):
         c0 = torch.zeros_like(h0)
 
         ### Flow RNN ###
-        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, h0)
+        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
         h_shift = torch.roll(h, shifts=1, dims=1)
@@ -144,14 +143,14 @@ class CausalFlowModel(nn.Module):
         
         ### Nonlinearity ###
         if self.nonlinear_enabled:
-            output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
+            output = torch.einsum("bni,bi->bni",trunk_output,output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output)
             output = output.view(batch_size,-1)
 
         ### Inner product ###
         else: 
-            output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
+            output = torch.einsum("bni,bi->bn",trunk_output,output_flow)
         return output, trunk_output
 
 ## MLP
