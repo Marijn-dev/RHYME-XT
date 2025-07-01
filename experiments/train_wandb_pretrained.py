@@ -366,7 +366,7 @@ def main():
 
             ### Visualize trajectory in WB ###
             y,x0_feed,t_feed,u_feed,deltas_feed,basis_functions,kernel_pars = trajectory(data['test'],0,delta=1) # delta is hardcoded
-            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device),basis_functions.to(device))
+            y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device),basis_functions.view(-1,basis_functions.shape[0],basis_functions.shape[1]).to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
             fig = plot_space_time_flat_trajectory_V2(y,y_pred)
             wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
