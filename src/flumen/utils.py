@@ -194,7 +194,7 @@ def pack_model_inputs(x0, t, u, delta):
     return x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
 
 def trajectory(data,trajectory_index,delta):
-    x0, init_state_noise, t, y, state_noise, control_seq = data[trajectory_index]
+    x0, init_state_noise, t, y, state_noise, control_seq, basis_functions, kernel_pars = data[trajectory_index]
     t = t.reshape(-1, 1).flip(0)  # Flip in time
     x0 = x0.reshape(1, *x0.shape).repeat(t.shape[0], *([1] * len(x0.shape)))
     rnn_inputs = torch.empty((t.shape[0], control_seq.shape[0], control_seq.shape[1] + 1))
@@ -213,7 +213,7 @@ def trajectory(data,trajectory_index,delta):
                                                    lengths,
                                                    batch_first=True,
                                                    enforce_sorted=True)
-    return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+    return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1),basis_functions,kernel_pars
 
 def plot_slider_1d(t,y,inputs,locations):
     """
