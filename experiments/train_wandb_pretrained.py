@@ -39,7 +39,7 @@ hyperparams = {
     'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0002,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'n_samples': 1, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
@@ -183,7 +183,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='LIF_Kernels', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_kernels', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
