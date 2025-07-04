@@ -254,8 +254,9 @@ class RNN_custom(nn.Module):
         self.batch_first = batch_first
 
         self.i2h = nn.Linear(input_size, hidden_size, bias=False)
-        self.h2h = nn.Linear(hidden_size, hidden_size,bias=True)
-
+        # self.h2h = nn.Linear(hidden_size, hidden_size,bias=True)
+        self.W_hh_tensor = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
+        self.bias = nn.Parameter(torch.zeros(self.hidden_size))
 
     def forward(self,rnn_input, h0,kernel_pars):
         # Adjust hidden to hidden weights based on external input
@@ -272,14 +273,15 @@ class RNN_custom(nn.Module):
         for t in range(seq_len):
             rnn_input_t = rnn_input_unpacked[:,t,:] # (B,features)
             i2h = self.i2h(rnn_input_t)             # (B,hidden_size)
-            h2h = self.h2h(h_t_minus_1)             # (B,hidden_size)
-            h_t = torch.tanh(i2h+h2h)               # (B,hidden_size)
+            # h2h = self.h2h(h_t_minus_1)             # (B,hidden_size)
+            h2h = h_t_minus_1 @ self.W_hh_tensor
+            h_t = torch.tanh(i2h+h2h+self.bias)               # (B,hidden_size)
             output.append(h_t.clone())          
             h_t_minus_1 = h_t.clone()
-            
+
         output = torch.stack(output)                # (seq_len, B,hidden_size)
         output = output.transpose(0, 1)             # (B,seq_len,hidden_size)
-        output = pack_padded_sequence(output, lengths, batch_first=True,enforce_sorted=True)      # pack output
+        output = pack_padded_sequence(output, lengths, batch_first=True,enforce_sorted=False)      # pack output
         return output, h_t
 
 
