@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
+import torch.nn.init as init
 
 
 class CausalFlowModel(nn.Module):
@@ -257,6 +258,7 @@ class RNN_custom(nn.Module):
         # self.h2h = nn.Linear(hidden_size, hidden_size,bias=True)
         self.W_hh_tensor = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
+        init.xavier_uniform_(self.W_hh_tensor)
 
     def forward(self,rnn_input, h0,kernel_pars):
         # Adjust hidden to hidden weights based on external input
