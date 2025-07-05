@@ -33,7 +33,7 @@ def validate(data,locations,loss_fn, model, device):
     with torch.no_grad():
         for example in data:
             x0, y, u, deltas,basis_functions,kernel_pars = prep_inputs(*example, device)
-            y_pred, basis_functions = model(x0, u, locations.to(device),deltas,basis_functions)
+            y_pred, basis_functions = model(x0, u, locations.to(device),deltas,kernel_pars,basis_functions)
             total_loss, data_loss = loss_fn(y, y_pred,basis_functions)
             vl += total_loss.item()
             data_loss_total += data_loss.item() 
@@ -45,7 +45,7 @@ def train_step(example,locations, loss_fn, model, optimizer, device):
 
     optimizer.zero_grad()
 
-    y_pred, basis_functions = model(x0, u,locations.to(device),deltas,basis_functions)
+    y_pred, basis_functions = model(x0, u,locations.to(device),deltas,kernel_pars,basis_functions)
     total_loss, _ = loss_fn(y, y_pred,basis_functions)
 
     total_loss.backward()

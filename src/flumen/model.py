@@ -96,8 +96,7 @@ class CausalFlowModel(nn.Module):
         ### Nonlinear decoder (MLP) ###
         self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
-    def forward(self, x, rnn_input,locations, deltas,basis_functions=None):
-        
+    def forward(self, x, rnn_input,locations, deltas,kernel_pars,basis_functions=None):
         if basis_functions is not None:
             trunk_output_svd = basis_functions
         else:
@@ -131,7 +130,7 @@ class CausalFlowModel(nn.Module):
         c0 = torch.zeros_like(h0)
 
         ### Flow RNN ###
-        rnn_out_seq_packed, _ = self.custom_u_rnn(rnn_input, h0,1)
+        rnn_out_seq_packed, _ = self.custom_u_rnn(rnn_input, h0,kernel_pars)
         # h: (B,seq_len,hidden_size) h_lens: (B)
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
@@ -256,18 +255,23 @@ class RNN_custom(nn.Module):
 
         self.i2h = nn.Linear(input_size, hidden_size, bias=False)
         # self.h2h = nn.Linear(hidden_size, hidden_size,bias=True)
-        self.W_hh_tensor = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
+        self.W_hh_tensor_mu1 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
+        self.W_hh_tensor_mu2 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
-        init.xavier_uniform_(self.W_hh_tensor)
+        init.xavier_uniform_(self.W_hh_tensor_mu1)
+        init.xavier_uniform_(self.W_hh_tensor_mu2)
 
     def forward(self,rnn_input, h0,kernel_pars):
         # Adjust hidden to hidden weights based on external input
-       
+
+        
         # rnn_input_unpacked:                     (B,seq_len,features)    
         rnn_input_unpacked, lengths = pad_packed_sequence(rnn_input, batch_first=self.batch_first)
         batch_size, seq_len, _ = rnn_input_unpacked.shape
         h0 = h0.view(batch_size,self.hidden_size)
-        device = rnn_input_unpacked.device
+        # print(batch_size)
+        # print(kernel_pars.shape)
+        kernel_pars = kernel_pars.view(batch_size,2)
         h_t_minus_1 = h0.clone()                    # (B,hidden_size)
         h_t = h0.clone()                            # (B,hidden_size)
         output = []                                 # (seq_len,B,hidden_size)
@@ -276,7 +280,10 @@ class RNN_custom(nn.Module):
             rnn_input_t = rnn_input_unpacked[:,t,:] # (B,features)
             i2h = self.i2h(rnn_input_t)             # (B,hidden_size)
             # h2h = self.h2h(h_t_minus_1)             # (B,hidden_size)
-            h2h = h_t_minus_1 @ self.W_hh_tensor
+            W_eff = kernel_pars[:, 0].view(-1, 1, 1) *  self.W_hh_tensor_mu1 + kernel_pars[:, 1].view(-1, 1, 1) * self.W_hh_tensor_mu2 # (B,hidden_size,hidden_size)
+            # h2h = h_t_minus_1 @ W_eff
+            # h2h = torch.bmm(h_t_minus_1.unsqueeze(1), W_eff).squeeze(1)  # (B, hidden_size)
+            h2h = torch.einsum("bi,bih->bh", h_t_minus_1, W_eff) # (B,hidden_size)
             h_t = torch.tanh(i2h+h2h+self.bias)               # (B,hidden_size)
             output.append(h_t.clone())          
             h_t_minus_1 = h_t.clone()
