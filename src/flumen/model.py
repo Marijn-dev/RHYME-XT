@@ -258,8 +258,8 @@ class RNN_custom(nn.Module):
         self.W_hh_tensor_mu1 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
         self.W_hh_tensor_mu2 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
-        init.xavier_uniform_(self.W_hh_tensor_mu1)
-        init.xavier_uniform_(self.W_hh_tensor_mu2)
+        # init.xavier_uniform_(self.W_hh_tensor_mu1)
+        # init.xavier_uniform_(self.W_hh_tensor_mu2)
 
     def forward(self,rnn_input, h0,kernel_pars):
         # Adjust hidden to hidden weights based on external input
