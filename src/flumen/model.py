@@ -260,6 +260,7 @@ class RNN_custom(nn.Module):
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
         # init.xavier_uniform_(self.W_hh_tensor_mu1)
         # init.xavier_uniform_(self.W_hh_tensor_mu2)
+        self.NN_W_hh = FFNet(in_size=2,out_size=hidden_size*hidden_size,hidden_size=[60,60],use_batch_norm=False)
 
     def forward(self,rnn_input, h0,kernel_pars):
         # Adjust hidden to hidden weights based on external input
@@ -272,6 +273,8 @@ class RNN_custom(nn.Module):
         # print(batch_size)
         # print(kernel_pars.shape)
         kernel_pars = kernel_pars.view(batch_size,2)
+        W_hh = self.NN_W_hh(kernel_pars)
+        W_hh = W_hh.view(batch_size,self.hidden_size,self.hidden_size)
         h_t_minus_1 = h0.clone()                    # (B,hidden_size)
         h_t = h0.clone()                            # (B,hidden_size)
         output = []                                 # (seq_len,B,hidden_size)
@@ -280,10 +283,12 @@ class RNN_custom(nn.Module):
             rnn_input_t = rnn_input_unpacked[:,t,:] # (B,features)
             i2h = self.i2h(rnn_input_t)             # (B,hidden_size)
             # h2h = self.h2h(h_t_minus_1)             # (B,hidden_size)
-            W_eff = kernel_pars[:, 0].view(-1, 1, 1) *  self.W_hh_tensor_mu1 + kernel_pars[:, 1].view(-1, 1, 1) * self.W_hh_tensor_mu2 # (B,hidden_size,hidden_size)
-            # h2h = h_t_minus_1 @ W_eff
+            # W_eff = kernel_pars[:, 0].view(-1, 1, 1) *  self.W_hh_tensor_mu1 + kernel_pars[:, 1].view(-1, 1, 1) * self.W_hh_tensor_mu2 # (B,hidden_size,hidden_size)
+            # h2h = h_t_minus_1 @ W_hh
+            h2h = torch.einsum("bh,bih->bh",h_t_minus_1,W_hh)
+
             # h2h = torch.bmm(h_t_minus_1.unsqueeze(1), W_eff).squeeze(1)  # (B, hidden_size)
-            h2h = torch.einsum("bi,bih->bh", h_t_minus_1, W_eff) # (B,hidden_size)
+            # h2h = torch.einsum("bi,bih->bh", h_t_minus_1, W_eff) # (B,hidden_size)
             h_t = torch.tanh(i2h+h2h+self.bias)               # (B,hidden_size)
             output.append(h_t.clone())          
             h_t_minus_1 = h_t.clone()
