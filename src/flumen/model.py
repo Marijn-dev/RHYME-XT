@@ -130,7 +130,7 @@ class CausalFlowModel(nn.Module):
         c0 = torch.zeros_like(h0)
 
         ### Flow RNN ###
-        rnn_out_seq_packed, _ = self.custom_u_rnn(rnn_input, h0,kernel_pars)
+        rnn_out_seq_packed, _ = self.custom_u_rnn(rnn_input, h0,kernel_pars,locations)
         # h: (B,seq_len,hidden_size) h_lens: (B)
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
@@ -237,7 +237,57 @@ class TrunkNet(nn.Module):
         self.layers.append(nn.Linear(hidden_size[-1], out_size))
 
     def forward(self, input):
+        print('B:',self.B)
         input_proj = 2 * torch.pi * input @ self.B.T
+        input = torch.cat([torch.sin(input_proj), torch.cos(input_proj)], dim=-1)
+        for layer in self.layers:
+            input = layer(input)
+        return input
+
+class HyperNet(nn.Module):
+
+    def __init__(self,
+                 in_size,
+                 out_size,
+                 hidden_size,
+                 use_batch_norm,
+                 dropout_prob=0.0,
+                 activation=nn.ReLU):
+        super(HyperNet, self).__init__()
+
+       
+        mu1 = torch.normal(mean=0.0, std=100, size=(in_size//4, 1))
+        mu2 = torch.normal(mean=0.0, std=200, size=(in_size//4, 1))
+        self.register_buffer("mu1", mu1)  
+        self.register_buffer("mu2", mu2)  
+
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(in_size, hidden_size[0]))
+        self.layers.append(activation())
+        
+        if use_batch_norm:
+            self.layers.append(nn.BatchNorm1d(hidden_size[0]))
+
+        if dropout_prob > 0:
+            self.layers.append(nn.Dropout(dropout_prob))
+
+        for isz, osz in zip(hidden_size[:-1], hidden_size[1:]):
+            self.layers.append(nn.Linear(isz, osz))
+            self.layers.append(activation())
+            # self.layers.append(nn.Dropout(0.01))  # Dropout layer
+
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(osz))
+            if dropout_prob > 0:
+                self.layers.append(nn.Dropout(dropout_prob))
+
+
+        self.layers.append(nn.Linear(hidden_size[-1], out_size))
+
+    def forward(self, input):
+        input_proj_mu1 = 2 * torch.pi * input[:,0].view(-1,1) @ self.mu1.T
+        input_proj_mu2 = 2 * torch.pi * input[:,1].view(-1,1) @ self.mu2.T
+        input_proj = torch.cat([input_proj_mu1, input_proj_mu2], dim=-1)  
         input = torch.cat([torch.sin(input_proj), torch.cos(input_proj)], dim=-1)
         for layer in self.layers:
             input = layer(input)
@@ -260,19 +310,16 @@ class RNN_custom(nn.Module):
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
         # init.xavier_uniform_(self.W_hh_tensor_mu1)
         # init.xavier_uniform_(self.W_hh_tensor_mu2)
-        self.NN_W_hh = FFNet(in_size=2,out_size=hidden_size*hidden_size,hidden_size=[60,60],use_batch_norm=False)
+        self.NN_W_hh = HyperNet(in_size=256,out_size=hidden_size*hidden_size,hidden_size=[100,100,100],use_batch_norm=False)
 
-    def forward(self,rnn_input, h0,kernel_pars):
+    def forward(self,rnn_input, h0,kernel_pars,locations):
         # Adjust hidden to hidden weights based on external input
-
-        
         # rnn_input_unpacked:                     (B,seq_len,features)    
         rnn_input_unpacked, lengths = pad_packed_sequence(rnn_input, batch_first=self.batch_first)
         batch_size, seq_len, _ = rnn_input_unpacked.shape
         h0 = h0.view(batch_size,self.hidden_size)
-        # print(batch_size)
-        # print(kernel_pars.shape)
         kernel_pars = kernel_pars.view(batch_size,2)
+        self.NN_W_hh(kernel_pars)
         W_hh = self.NN_W_hh(kernel_pars)
         W_hh = W_hh.view(batch_size,self.hidden_size,self.hidden_size)
         h_t_minus_1 = h0.clone()                    # (B,hidden_size)
@@ -282,13 +329,14 @@ class RNN_custom(nn.Module):
         for t in range(seq_len):
             rnn_input_t = rnn_input_unpacked[:,t,:] # (B,features)
             i2h = self.i2h(rnn_input_t)             # (B,hidden_size)
+
             # h2h = self.h2h(h_t_minus_1)             # (B,hidden_size)
             # W_eff = kernel_pars[:, 0].view(-1, 1, 1) *  self.W_hh_tensor_mu1 + kernel_pars[:, 1].view(-1, 1, 1) * self.W_hh_tensor_mu2 # (B,hidden_size,hidden_size)
             # h2h = h_t_minus_1 @ W_hh
             h2h = torch.einsum("bh,bih->bh",h_t_minus_1,W_hh)
-
             # h2h = torch.bmm(h_t_minus_1.unsqueeze(1), W_eff).squeeze(1)  # (B, hidden_size)
             # h2h = torch.einsum("bi,bih->bh", h_t_minus_1, W_eff) # (B,hidden_size)
+
             h_t = torch.tanh(i2h+h2h+self.bias)               # (B,hidden_size)
             output.append(h_t.clone())          
             h_t_minus_1 = h_t.clone()
