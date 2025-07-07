@@ -45,7 +45,7 @@ class CausalFlowModel(nn.Module):
         self.in_size_encoder = self.control_dim = self.basis_function_modes
         self.control_rnn_depth = control_rnn_depth
 
-        self.u_rnn = torch.nn.LSTM(
+        self.u_rnn = torch.nn.RNN(
             input_size=1 + self.control_dim,
             hidden_size=control_rnn_size,
             batch_first=True,
@@ -121,7 +121,7 @@ class CausalFlowModel(nn.Module):
         c0 = torch.zeros_like(h0)
 
         ### Flow RNN ###
-        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, (h0, c0))
+        rnn_out_seq_packed, _ = self.u_rnn(rnn_input, h0)
         h, h_lens = torch.nn.utils.rnn.pad_packed_sequence(rnn_out_seq_packed,
                                                            batch_first=True)
         h_shift = torch.roll(h, shifts=1, dims=1)
