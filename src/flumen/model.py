@@ -305,8 +305,8 @@ class RNN_custom(nn.Module):
 
         self.i2h = nn.Linear(input_size, hidden_size, bias=False)
         # self.h2h = nn.Linear(hidden_size, hidden_size,bias=True)
-        self.W_hh_tensor_mu1 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
-        self.W_hh_tensor_mu2 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
+        # self.W_hh_tensor_mu1 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
+        # self.W_hh_tensor_mu2 = nn.Parameter(torch.randn(self.hidden_size, self.hidden_size))
         self.bias = nn.Parameter(torch.zeros(self.hidden_size))
         # init.xavier_uniform_(self.W_hh_tensor_mu1)
         # init.xavier_uniform_(self.W_hh_tensor_mu2)
