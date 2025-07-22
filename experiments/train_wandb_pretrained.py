@@ -22,14 +22,14 @@ import os
 
 hyperparams = {
     'control_rnn_size': 250,
-    'control_rnn_depth': 2,
+    'control_rnn_depth': 1,
     'encoder_size': 2,
     'encoder_depth': 1,
-    'decoder_size': 3,
+    'decoder_size': 1,
     'decoder_depth': 1,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
@@ -38,7 +38,7 @@ hyperparams = {
     'NL_size':[100,100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0002,
-    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
@@ -183,7 +183,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='LIF_L1_sweep', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_L1_mexhat', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
