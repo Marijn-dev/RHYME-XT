@@ -22,10 +22,10 @@ import os
 
 hyperparams = {
     'control_rnn_size': 250,
-    'control_rnn_depth': 1,
+    'control_rnn_depth': 2,
     'encoder_size': 2,
     'encoder_depth': 1,
-    'decoder_size': 1,
+    'decoder_size': 3,
     'decoder_depth': 1,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
@@ -35,11 +35,11 @@ hyperparams = {
     'use_conv_encoder':False,
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
     'trunk_size_extra':[100,100,100,100], # hidden size of the trunk modeled as extra layers
-    'NL_size':[100,100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
+    'NL_size':[100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.0002,
-    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 2, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 5, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
