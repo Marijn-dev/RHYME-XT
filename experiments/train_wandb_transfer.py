@@ -30,7 +30,7 @@ hyperparams = {
     'decoder_depth': 1,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
