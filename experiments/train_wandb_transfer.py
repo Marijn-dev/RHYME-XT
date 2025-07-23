@@ -304,10 +304,10 @@ def main():
     for param in model.x_dnn.parameters():
         param.requires_grad = False
 
-    # # Freeze decoder in flow model
-    # if hasattr(model, "u_dnn"):
-    #     for param in model.u_dnn.parameters():
-    #         param.requires_grad = False
+    # Freeze decoder in flow model
+    if hasattr(model, "u_dnn"):
+        for param in model.u_dnn.parameters():
+            param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
