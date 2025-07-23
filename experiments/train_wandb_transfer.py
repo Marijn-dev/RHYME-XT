@@ -1,5 +1,6 @@
 ############ USES A PRETRAINED (ON SVD EXTRACTED BASIS MODES) TRUNK NET ############
 
+from tabnanny import check
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -9,7 +10,7 @@ torch.set_default_dtype(torch.float32)
 import pickle, yaml
 from pathlib import Path
 
-from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
+from flumen import CausalFlowModel, model, print_gpu_info, TrajectoryDataset, TrunkNet
 from flumen.train import EarlyStopping, train_step, validate
 
 from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
@@ -29,7 +30,7 @@ hyperparams = {
     'decoder_depth': 1,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
     'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
@@ -46,7 +47,8 @@ hyperparams = {
     'sched_patience': 5,
     'sched_factor': 2,
     'train_loss': "L1",
-    'val_loss': "L1"
+    'val_loss': "L1",
+    'use_from_flow': ["encoder","RNN","decoder"], # which parts to load in from pretrained flow model
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -289,11 +291,31 @@ def main():
         yaml.dump(model_metadata, f)
 
     flow_path = Path(sys_args.pretrained_flow)
+    # model = CausalFlowModel(**model_args,trunk_model=trunk_model)
+    # model.load_state_dict(torch.load(flow_path))
+    # model.trunk_svd = trunk_model  # Replace the old one
+    # model.to(device)
+    # model.train() 
+    checkpoint = torch.load(flow_path)
+    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+
+    ### Filter out parts of the pretrained flow model to use ###
+    mapping = {
+    "encoder": "x_dnn.",
+    "RNN": "u_rnn.",
+    "decoder": "u_dnn."
+}
+    parts_to_keep = [mapping[key] for key in wandb.config['use_from_flow'] if key in mapping]
+    filtered_state_dict = {
+    k: v for k, v in state_dict.items()
+    if any(k.startswith(prefix) for prefix in parts_to_keep)
+    }
+
+
     model = CausalFlowModel(**model_args,trunk_model=trunk_model)
-    model.load_state_dict(torch.load(flow_path))
-    model.trunk_svd = trunk_model  # Replace the old one
+    missing_keys, unexpected_keys = model.load_state_dict(filtered_state_dict, strict=False)
     model.to(device)
-    model.train() 
+    model.train()
 
     # Freeze the pretrained model 
     for param in model.trunk_svd.parameters():
@@ -303,10 +325,10 @@ def main():
     for param in model.x_dnn.parameters():
         param.requires_grad = False
 
-    # Freeze decoder in flow model
-    if hasattr(model, "u_dnn"):
-        for param in model.u_dnn.parameters():
-            param.requires_grad = False
+    # # Freeze decoder in flow model
+    # if hasattr(model, "u_dnn"):
+    #     for param in model.u_dnn.parameters():
+    #         param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
