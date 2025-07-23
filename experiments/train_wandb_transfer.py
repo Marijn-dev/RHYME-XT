@@ -47,8 +47,7 @@ hyperparams = {
     'sched_patience': 5,
     'sched_factor': 2,
     'train_loss': "L1",
-    'val_loss': "L1",
-    'use_from_flow': ["encoder","RNN","decoder"], # which parts to load in from pretrained flow model
+    'val_loss': "L1"
 }
 
 def L1_relative_orthogonal_trunk(y_true,y_pred,basis_functions):
@@ -291,32 +290,12 @@ def main():
         yaml.dump(model_metadata, f)
 
     flow_path = Path(sys_args.pretrained_flow)
-    # model = CausalFlowModel(**model_args,trunk_model=trunk_model)
-    # model.load_state_dict(torch.load(flow_path))
-    # model.trunk_svd = trunk_model  # Replace the old one
-    # model.to(device)
-    # model.train() 
-    checkpoint = torch.load(flow_path)
-    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
-
-    ### Filter out parts of the pretrained flow model to use ###
-    mapping = {
-    "encoder": "x_dnn.",
-    "RNN": "u_rnn.",
-    "decoder": "u_dnn."
-}
-    parts_to_keep = [mapping[key] for key in wandb.config['use_from_flow'] if key in mapping]
-    filtered_state_dict = {
-    k: v for k, v in state_dict.items()
-    if any(k.startswith(prefix) for prefix in parts_to_keep)
-    }
-
-
     model = CausalFlowModel(**model_args,trunk_model=trunk_model)
-    missing_keys, unexpected_keys = model.load_state_dict(filtered_state_dict, strict=False)
+    model.load_state_dict(torch.load(flow_path))
+    model.trunk_svd = trunk_model  # Replace the old one
     model.to(device)
-    model.train()
-
+    model.train() 
+ 
     # Freeze the pretrained model 
     for param in model.trunk_svd.parameters():
         param.requires_grad = False
