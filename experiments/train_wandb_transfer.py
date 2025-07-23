@@ -291,7 +291,7 @@ def main():
     flow_path = Path(sys_args.pretrained_flow)
     model = CausalFlowModel(**model_args,trunk_model=trunk_model)
     model.load_state_dict(torch.load(flow_path))
-    model.trunk_model_svd = trunk_model  # Replace the old one
+    model.trunk_svd = trunk_model  # Replace the old one
     model.to(device)
     model.train() 
 
