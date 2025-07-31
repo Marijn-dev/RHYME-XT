@@ -190,7 +190,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='LIF_L1_mexhat', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_L1_oscillatory', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
