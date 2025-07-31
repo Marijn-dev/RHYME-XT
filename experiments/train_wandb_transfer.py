@@ -23,30 +23,31 @@ import os
 
 hyperparams = {
     'control_rnn_size': 250,
-    'control_rnn_depth': 2,
+    'control_rnn_depth': 1,
     'encoder_size': 2,
-    'encoder_depth': 1,
-    'decoder_size': 3,
-    'decoder_depth': 1,
-    'batch_size': 64,
+    'encoder_depth': 2,
+    'decoder_size': 1,
+    'decoder_depth': 3,
+    'batch_size': 32,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
-    'trunk_size_extra':[100,100,100,100], # hidden size of the trunk modeled as extra layers
-    'NL_size':[100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
-    'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
-    'lr': 0.0002,
-    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 5, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
+    'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
+    'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
+    'lr': 0.0001,
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 4, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
-    'es_patience': 30,
+    'es_patience': 10,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'train_loss': "L1",
+    'freeze_flow': [], # What to freeze in the pretrained flow model
+    'train_loss': "L1_orthogonal",
     'val_loss': "L1"
 }
 
@@ -189,7 +190,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='LIF_L1_oscillatory', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_L1_mexhat', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
@@ -296,18 +297,29 @@ def main():
     model.to(device)
     model.train() 
  
-    # Freeze the pretrained model 
+    
+    ### Freeze the pretrained SVD trunk model ###
     for param in model.trunk_svd.parameters():
         param.requires_grad = False
 
-    # Freeze encoder in flow model
-    for param in model.x_dnn.parameters():
-        param.requires_grad = False
-
-    # Freeze decoder in flow model
-    if hasattr(model, "u_dnn"):
-        for param in model.u_dnn.parameters():
+    ### Freeze encoder in flow model ###
+    if 'encoder' in wandb.config['freeze_flow']:
+        print("Freezing encoder in flow model...")
+        for param in model.x_dnn.parameters():
             param.requires_grad = False
+
+    ### Freeze RNN in flow model ###
+    if 'rnn' in wandb.config['freeze_flow']:  
+        print("Freezing rnn in flow model...")
+        for param in model.u_rnn.parameters():
+            param.requires_grad = False
+
+    ### Freeze decoder in flow model ###
+    if hasattr(model, "u_dnn"):
+        if 'decoder' in wandb.config['freeze_flow']:
+            print("Freezing decoder in flow model...")
+            for param in model.u_dnn.parameters():
+                param.requires_grad = False
 
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
@@ -340,7 +352,7 @@ def main():
     train_loss, train_loss_data = validate(train_dl,data['Locations'],train_loss_fn, model, device)
     _, val_loss = validate(val_dl,data['Locations'],val_loss_fn, model, device)
     _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model,device)
-
+ 
     early_stop.step(val_loss)
     print(
         f"{0:>5d} :: {train_loss:>16e} :: {val_loss:>16e} :: " \
@@ -348,6 +360,23 @@ def main():
     )
 
     start = time.time()
+
+    wandb.log({
+            'Flownet/time': time.time() - start,
+            'Flownet/epoch': 0,
+            'Flownet/lr': sched.get_last_lr()[0],
+            'Flownet/train_loss': train_loss,
+            'Flownet/train_loss_data': train_loss_data,
+            'Flownet/val_loss': val_loss,
+            'Flownet/test_loss': test_loss,
+        })
+    
+    ### visualize trajectory when no training has been done yet ###
+    y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],0,delta=1) # delta is hardcoded
+    y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),data['Locations'].to(device),deltas_feed.to(device))
+    test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
+    fig = plot_space_time_flat_trajectory_V2(y,y_pred)
+    wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": 0})
 
     for epoch in range(wandb.config['n_epochs']):
         model.train()
