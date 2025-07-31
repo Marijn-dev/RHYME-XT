@@ -46,7 +46,7 @@ hyperparams = {
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'freeze_flow': [], # What to freeze in the pretrained flow model
+    'freeze_flow': [], # What to freeze in the pretrained flow model options: ['encoder','rnn','decoder','nonlinear']
     'train_loss': "L1_orthogonal",
     'val_loss': "L1"
 }
@@ -321,6 +321,13 @@ def main():
             for param in model.u_dnn.parameters():
                 param.requires_grad = False
 
+    ### Freeze decoder in flow model ###
+    if hasattr(model, "output_NN"):
+        if 'nonlinear' in wandb.config['freeze_flow']:
+            print("Freezing nonlinearity in flow model...")
+            for param in model.output_NN.parameters():
+                param.requires_grad = False
+                
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
 
