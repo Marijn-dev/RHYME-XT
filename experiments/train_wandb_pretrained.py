@@ -22,30 +22,30 @@ import os
 
 hyperparams = {
     'control_rnn_size': 250,
-    'control_rnn_depth': 2,
+    'control_rnn_depth': 1,
     'encoder_size': 2,
-    'encoder_depth': 1,
-    'decoder_size': 3,
-    'decoder_depth': 1,
+    'encoder_depth': 2,
+    'decoder_size': 1,
+    'decoder_depth': 3,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
-    'trunk_size_extra':[100,100,100,100], # hidden size of the trunk modeled as extra layers
-    'NL_size':[100,100], # hidden size of nonlinearity at end, only used if use_nonlinear is True
-    'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
-    'lr': 0.0002,
-    'max_seq_len': 50,  # Maximum sequence length for training dataset (-1 for full sequences)
-    'n_samples': 5, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
+    'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
+    'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
+    'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
+    'lr': 0.00011614090101177696,
+    'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
+    'n_samples': 4, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
-    'train_loss': "L1",
+    'train_loss': "L1_orthogonal",
     'val_loss': "L1"
 }
 
