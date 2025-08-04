@@ -1,0 +1,31 @@
+dynamics:
+  name: LIFBrian2 # Leaky Integrate and Fire
+  args:
+    x_lim: &x_lim 25 # [mm]
+    tau: 10 # [ms]
+    N: &N 100 # neurons
+    theta: 1.0 # activation threshold
+    refractory: 5 # [ms]
+    reset_value: 0 # reset value
+    conduction_speed: 1 # [mm/ms]
+    kernel_type: 0 # 0: Guassian [scale,sigma], 1: Mex-hat, 2: Oscillatory 3: Cosinescale
+    kernel_pars: [0.15, 0.0012] # Gaussian
+    delta: &delta 1
+
+sequence_generator:
+  name: StepBrian # multipe guassians
+  args:
+    step: False # True: step, False: gaussian
+    magnitudes: [1.1, 2.5]
+    period: 10 # dimensionless
+    dim: *N
+    amplitude: 2 # when step: True
+    std: 10 # when step: True
+
+initial_state_generator:
+  name: LifInitialState
+  args:
+    bumps: 2
+    N: *N # number of bumps
+
+control_delta: *delta # [ms]
