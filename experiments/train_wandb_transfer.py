@@ -38,7 +38,7 @@ hyperparams = {
     'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
     'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
-    'lr': 0.0001,
+    'lr': 0.00001,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 4, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
     'n_epochs': 1000,
@@ -190,7 +190,7 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='LIF_L1_oscillatory', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='LIF_L1_guassian', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
@@ -327,7 +327,7 @@ def main():
             print("Freezing nonlinearity in flow model...")
             for param in model.output_NN.parameters():
                 param.requires_grad = False
-                
+
     # optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
 
