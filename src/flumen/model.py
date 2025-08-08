@@ -102,8 +102,8 @@ class CausalFlowModel(nn.Module):
                 trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
             else:
                 trunk_output = self.trunk_svd(locations.view(-1, 1)) 
-            x = torch.einsum("ni,bn->bi",trunk_output,x) # a(0)
-            u = torch.einsum('ni,btn->bti',trunk_output,u) # projected inputs
+            x = torch.einsum("ni,bn->bi",trunk_output[:, :self.basis_function_modes],x) # a(0)
+            u = torch.einsum('ni,btn->bti',trunk_output[:, :self.basis_function_modes],u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          
             rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
@@ -139,14 +139,14 @@ class CausalFlowModel(nn.Module):
         
         ### Nonlinearity ###
         if self.nonlinear_enabled:
-            output = torch.einsum("ni,bi->bni",trunk_output,output_flow)
+            output = torch.einsum("ni,bi->bni",trunk_output[:, :self.basis_function_modes],output_flow)
             batch_size = output.shape[0]
             output = self.output_NN(output)
             output = output.view(batch_size,-1)
-
+            
         ### Inner product ###
         else: 
-            output = torch.einsum("ni,bi->bn",trunk_output,output_flow)
+            output = torch.einsum("ni,bi->bn",trunk_output[:, :self.basis_function_modes],output_flow)
         return output, trunk_output
 
 ## MLP
