@@ -29,13 +29,13 @@ hyperparams = {
     'decoder_depth': 3,
     'batch_size': 64,
     'unfreeze_epoch':1000, ## From this epoch onwards, trunk will learn during online training
-    'use_nonlinear':False, ## True: Nonlinearity at end, False: Inner product
-    'IC_encoder_decoder':True, # True: encoder and decoder enforce initial condition
+    'use_nonlinear':True, ## True: Nonlinearity at end, False: Inner product
+    'IC_encoder_decoder':False, # True: encoder and decoder enforce initial condition
     'regular':False, # True: standard flow model
     'use_conv_encoder':False,
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
     'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
-    'NL_size':[], # hidden size of nonlinearity at end, only used if use_nonlinear is True
+    'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
     'trunk_modes':50,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.00011614090101177696,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
@@ -183,14 +183,22 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='Ablation', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='Noise', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
-    val_data = TrajectoryDataset(data["val"])
+    ### add noise to clean dataset ###
+    if sys_args.reset_noise == True:
+        print("add noise to IC and output with STD:",sys_args.noise_std)
+        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'],noise_std=sys_args.noise_std)
+        val_data = TrajectoryDataset(data["val"],noise_std=sys_args.noise_std)
+    else:   
+        print("No noise")
+        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
+        val_data = TrajectoryDataset(data["val"])
+
     test_data = TrajectoryDataset(data["test"])
 
     ### Pretrain trunk if no pretrained trunk is given ###
@@ -201,7 +209,7 @@ def main():
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
-        PHI = data['PHI'][:,:wandb.config['trunk_modes']].to(device)
+        PHI = data['PHI_01'][:,:wandb.config['trunk_modes']].to(device)
         best_loss = 0.03
         locations = data['Locations'].view(-1,1).to(device)
         for epoch in range(0,200000):

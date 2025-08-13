@@ -98,7 +98,8 @@ class TrajectoryDataset(Dataset):
     def __init__(self,
                  raw_data: RawTrajectoryDataset,
                  max_seq_len=-1,
-                 n_samples=1):
+                 n_samples=1,
+                 noise_std=0.):
 
         self.state_dim = raw_data.state_dim
         self.control_dim = raw_data.control_dim
@@ -116,7 +117,9 @@ class TrajectoryDataset(Dataset):
 
         k_tr = 0
 
-        for (x0, x0_n, t, y, y_n, u) in raw_data:
+        for (x0, _, t, y, _, u) in raw_data:
+            y_n = torch.normal(mean=0.0, std=noise_std, size=y.shape)  # zero-mean Gaussian noise
+            x0_n = torch.normal(mean=0.0, std=noise_std, size=x0.shape)  # zero-mean Gaussian noise
             y += y_n
             x0 += x0_n
 
