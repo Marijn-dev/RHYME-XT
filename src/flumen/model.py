@@ -83,8 +83,8 @@ class CausalFlowModel(nn.Module):
 
         ### Trunk (MLP) ###
         self.trunk_svd = trunk_model # Trained on SVD
-        if trunk_size_extra > 0:
-            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_size_extra,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
+        if trunk_modes_extra > 0:
+            self.trunk_extra = TrunkNet(in_size=256,out_size=trunk_modes_extra,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
         else: 
             self.trunk_extra = None
 
@@ -110,7 +110,7 @@ class CausalFlowModel(nn.Module):
             else:
                 trunk_input = self.trunk_svd(locations_input.view(-1, 1)) 
                 trunk_output = self.trunk_svd(locations_output.view(-1, 1))
-                
+
             x = torch.einsum("ki,bk->bi",trunk_input[:, :self.basis_function_modes],x) # a(0)
             u = torch.einsum('ki,btk->bti',trunk_input[:, :self.basis_function_modes],u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          

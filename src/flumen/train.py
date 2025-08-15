@@ -32,9 +32,8 @@ def validate(data,locations_out,locations_in,loss_fn, model, device,selected_ind
             x0, y, u, deltas = prep_inputs(*example, device)
 
             y_pred, basis_functions = model(x0, u, locations_out.to(device), deltas, locations_in.to(device))
-            y_pred_subset = y_pred[:, selected_indices]
             y_subset = y[:, selected_indices]   
-            total_loss, data_loss = loss_fn(y_subset, y_pred_subset,basis_functions)
+            total_loss, data_loss = loss_fn(y_subset, y_pred,basis_functions)
             vl += total_loss.item()
             data_loss_total += data_loss.item() 
     return vl / len(data), data_loss_total / len(data)
@@ -45,9 +44,8 @@ def train_step(example,locations_out,locations_in, loss_fn, model, optimizer, de
     optimizer.zero_grad()
 
     y_pred, basis_functions = model(x0, u, locations_out.to(device), deltas, locations_in.to(device))
-    y_pred_subset = y_pred[:, selected_indices]
     y_subset = y[:, selected_indices]
-    total_loss, _ = loss_fn(y_subset, y_pred_subset, basis_functions)
+    total_loss, _ = loss_fn(y_subset, y_pred, basis_functions)
     total_loss.backward()
     optimizer.step()
 

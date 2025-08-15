@@ -9,7 +9,7 @@ torch.set_default_dtype(torch.float32)
 import pickle, yaml
 from pathlib import Path
 
-from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet,FFNet
+from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
 from flumen.train import EarlyStopping, train_step, validate
 
 from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
@@ -190,17 +190,17 @@ def main():
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    # ### add noise to clean dataset ###
-    # if sys_args.reset_noise == True:
-    #     print("add noise to IC and output with STD:",sys_args.noise_std)
-    #     train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'],noise_std=sys_args.noise_std)
-    #     val_data = TrajectoryDataset(data["val"],noise_std=sys_args.noise_std)
-    # else:   
-    #     print("No noise")
-    #     train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
-    #     val_data = TrajectoryDataset(data["val"])
+    ### add noise to clean dataset ###
+    if sys_args.reset_noise == True:
+        print("add noise to IC and output with STD:",sys_args.noise_std)
+        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'],noise_std=sys_args.noise_std)
+        val_data = TrajectoryDataset(data["val"],noise_std=sys_args.noise_std)
+    else:   
+        print("No noise")
+        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
+        val_data = TrajectoryDataset(data["val"])
 
-    # test_data = TrajectoryDataset(data["test"])
+    test_data = TrajectoryDataset(data["test"])
     x_out = data['Locations']*100
     x_in = data['Locations']*100
     selected_indices = torch.linspace(0, 99, steps=wandb.config['trunk_modes_svd']).long()
@@ -258,7 +258,7 @@ def main():
     ### Use pretrained trunk model ###
     else:
         print("Using pretrained trunk model...")
-        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        # modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
         trunk_path = Path(sys_args.pretrained_trunk)
         trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.load_state_dict(torch.load(trunk_path))
