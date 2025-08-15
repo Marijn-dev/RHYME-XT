@@ -85,8 +85,13 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             "control": u,
             "full_state": y_full
         }
-
-    train_data = [get_example() for _ in range(n_train)]
+    train_data = []
+    for i in range(n_train):
+        if i % 100 == 0:
+            print(f"Generating example {i+1}/{n_train}")
+        example = get_example()
+        train_data.append(example)
+    # train_data = [get_example() for _ in range(n_train)]
     trajectory_sampler.reset_rngs()
 
     val_data = [get_example() for _ in range(n_val)]
@@ -98,7 +103,11 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
     for d in train_data
     ], dim=0)
-    PHI, SIGMA, _ = torch.linalg.svd(states_combined.T,full_matrices=False)
+    PHI_01, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.01,full_matrices=False)
+    PHI_05, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.05,full_matrices=False)
+    PHI_10, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.1,full_matrices=False)
+    PHI_20, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.2,full_matrices=False)
+    PHI_50, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.5,full_matrices=False)
 
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
@@ -124,8 +133,8 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     for d in (train_data, val_data, test_data):
         for p in postprocess:
             p(d)
-            
-    return train_data, val_data, test_data, PHI, SIGMA
+
+    return train_data, val_data, test_data, PHI_01, PHI_05, PHI_10, PHI_20, PHI_50
 
 
 def make_trajectory_sampler(settings):

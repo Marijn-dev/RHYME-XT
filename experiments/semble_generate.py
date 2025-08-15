@@ -20,7 +20,7 @@ def main():
     postprocess = get_postprocess(settings["dynamics"]["name"])
     
     # PHI is U of SVD of concatenated train_data trajectories
-    train_data, val_data, test_data,PHI,SIGMA = generate(args,
+    train_data, val_data, test_data, PHI_01, PHI_05, PHI_10, PHI_20, PHI_50 = generate(args,
                                                sampler,
                                                postprocess=postprocess) 
     
@@ -31,8 +31,11 @@ def main():
         "test": test_data,
         "settings": settings,
         "args": vars(args),
-        "PHI":PHI,
-        "SIGMA": SIGMA,
+        "PHI_01": PHI_01,
+        "PHI_05": PHI_05,
+        "PHI_10": PHI_10,
+        "PHI_20": PHI_20,
+        "PHI_50": PHI_50,
         "Locations":  locations,
     }
 
