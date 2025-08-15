@@ -26,11 +26,17 @@ def prep_inputs(x0, y, u, lengths, device):
 def validate(data,locations,loss_fn, model, device):
     vl = 0.
     data_loss_total = 0.
+    print('validation')
+
     with torch.no_grad():
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
+            
             y_pred, basis_functions = model(x0, u, locations.to(device),deltas)
-            total_loss, data_loss = loss_fn(y, y_pred,basis_functions)
+            selected_indices = torch.linspace(0, y.shape[1]-1, steps=50).long().to(device)
+            y_pred_subset = y_pred[:, selected_indices]
+            y_subset = y[:, selected_indices]   
+            total_loss, data_loss = loss_fn(y_subset, y_pred_subset,basis_functions)
             vl += total_loss.item()
             data_loss_total += data_loss.item() 
     return vl / len(data), data_loss_total / len(data)
@@ -38,12 +44,14 @@ def validate(data,locations,loss_fn, model, device):
 
 def train_step(example,locations, loss_fn, model, optimizer, device):
     x0, y, u, deltas = prep_inputs(*example, device)
-
     optimizer.zero_grad()
 
     y_pred, basis_functions = model(x0, u,locations.to(device),deltas)
-    total_loss, _ = loss_fn(y, y_pred,basis_functions)
-
+    selected_indices = torch.linspace(0, y.shape[1]-1, steps=50).long().to(device)
+    
+    y_pred_subset = y_pred[:, selected_indices]
+    y_subset = y[:, selected_indices] 
+    total_loss, _ = loss_fn(y_subset, y_pred_subset,basis_functions)
     total_loss.backward()
     optimizer.step()
 
