@@ -23,7 +23,8 @@ class CausalFlowModel(nn.Module):
                  trunk_size_svd,
                  trunk_size_extra,
                  NL_size,
-                 trunk_modes,
+                 trunk_modes_svd,
+                 trunk_modes_extra,
                  trunk_model,
                  use_batch_norm):
         super(CausalFlowModel, self).__init__()
@@ -32,7 +33,7 @@ class CausalFlowModel(nn.Module):
         self.control_dim = control_dim
         self.output_dim = output_dim
         self.control_rnn_size = control_rnn_size
-        self.trunk_modes = trunk_modes
+        self.trunk_modes = trunk_modes_svd + trunk_modes_extra
         self.trunk_size_svd = trunk_size_svd
         self.trunk_size_extra = trunk_size_extra
         self.NL_size = NL_size
@@ -82,28 +83,36 @@ class CausalFlowModel(nn.Module):
 
         ### Trunk (MLP) ###
         self.trunk_svd = trunk_model # Trained on SVD
-        if trunk_modes > state_dim:
-            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_modes-self.state_dim,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
+        if trunk_size_extra > 0:
+            self.trunk_extra = TrunkNet(in_size=256,out_size=self.trunk_size_extra,hidden_size=self.trunk_size_extra,use_batch_norm=False,dropout_prob=0.1)
         else: 
             self.trunk_extra = None
 
         ### Nonlinear decoder (MLP) ###
-        self.output_NN = FFNet(in_size=trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=self.trunk_modes,out_size = 1,hidden_size=self.NL_size,use_batch_norm=use_batch_norm)
 
-    def forward(self, x, rnn_input,locations, deltas):
+    def forward(self, x, rnn_input,locations_output, deltas,locations_input=None):
+        if locations_input is None:
+            locations_input = locations_output
 
         ### Projection ###
         if self.regular_enabled == False:
             unpadded_u, unpacked_lengths = pad_packed_sequence(rnn_input, batch_first=True)     # unpack input
             u = unpadded_u[:, :, :-1]                                                           # extract inputs values
             if self.trunk_extra is not None:                 
-                trunk_output_svd = self.trunk_svd(locations.view(-1, 1)) 
-                trunk_output_extra = self.trunk_extra(locations.view(-1, 1))
+                trunk_input_svd = self.trunk_svd(locations_input.view(-1, 1)) 
+                trunk_input_extra = self.trunk_extra(locations_input.view(-1, 1))
+                trunk_input = torch.cat([trunk_input_svd, trunk_input_extra], dim=1)  
+
+                trunk_output_svd = self.trunk_svd(locations_output.view(-1, 1)) 
+                trunk_output_extra = self.trunk_extra(locations_output.view(-1, 1))
                 trunk_output = torch.cat([trunk_output_svd, trunk_output_extra], dim=1)  
             else:
-                trunk_output = self.trunk_svd(locations.view(-1, 1)) 
-            x = torch.einsum("ni,bn->bi",trunk_output[:, :self.basis_function_modes],x) # a(0)
-            u = torch.einsum('ni,btn->bti',trunk_output[:, :self.basis_function_modes],u) # projected inputs
+                trunk_input = self.trunk_svd(locations_input.view(-1, 1)) 
+                trunk_output = self.trunk_svd(locations_output.view(-1, 1))
+                
+            x = torch.einsum("ki,bk->bi",trunk_input[:, :self.basis_function_modes],x) # a(0)
+            u = torch.einsum('ki,btk->bti',trunk_input[:, :self.basis_function_modes],u) # projected inputs
             u_deltas = torch.cat((u, deltas), dim=-1)          
             rnn_input = pack_padded_sequence(u_deltas, unpacked_lengths, batch_first=True)      # repack RNN input
 
@@ -199,7 +208,7 @@ class TrunkNet(nn.Module):
         super(TrunkNet, self).__init__()
 
        
-        B = torch.normal(mean=0.0, std=100, size=(128, 1))
+        B = torch.normal(mean=0.0, std=0.5, size=(128, 1))
         self.register_buffer("B", B)  
 
         self.layers = nn.ModuleList()

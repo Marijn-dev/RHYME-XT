@@ -9,7 +9,7 @@ torch.set_default_dtype(torch.float32)
 import pickle, yaml
 from pathlib import Path
 
-from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet
+from flumen import CausalFlowModel, print_gpu_info, TrajectoryDataset, TrunkNet,FFNet
 from flumen.train import EarlyStopping, train_step, validate
 
 from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
@@ -36,7 +36,8 @@ hyperparams = {
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
     'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
     'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
-    'trunk_modes':50,   # if bigger than state dim, second trunk_extra will be used
+    'trunk_modes_svd':25,   
+    'trunk_modes_extra':75,
     'lr': 0.00011614090101177696,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 4, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
@@ -183,36 +184,47 @@ def main():
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='Noise', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='Space_with_offline', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    ### add noise to clean dataset ###
-    if sys_args.reset_noise == True:
-        print("add noise to IC and output with STD:",sys_args.noise_std)
-        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'],noise_std=sys_args.noise_std)
-        val_data = TrajectoryDataset(data["val"],noise_std=sys_args.noise_std)
-    else:   
-        print("No noise")
-        train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
-        val_data = TrajectoryDataset(data["val"])
+    # ### add noise to clean dataset ###
+    # if sys_args.reset_noise == True:
+    #     print("add noise to IC and output with STD:",sys_args.noise_std)
+    #     train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'],noise_std=sys_args.noise_std)
+    #     val_data = TrajectoryDataset(data["val"],noise_std=sys_args.noise_std)
+    # else:   
+    #     print("No noise")
+    #     train_data = TrajectoryDataset(data["train"],max_seq_len=wandb.config['max_seq_len'],n_samples=wandb.config['n_samples'])
+    #     val_data = TrajectoryDataset(data["val"])
 
-    test_data = TrajectoryDataset(data["test"])
+    # test_data = TrajectoryDataset(data["test"])
+    x_out = data['Locations']*100
+    x_in = data['Locations']*100
+    selected_indices = torch.linspace(0, 99, steps=wandb.config['trunk_modes_svd']).long()
+    selected_indices_test = torch.linspace(0, 99, steps=100).long()
+
+    x_out_train = x_out[selected_indices]
+    x_out_test = x_out[selected_indices_test]
 
     ### Pretrain trunk if no pretrained trunk is given ###
     if sys_args.pretrained_trunk == False:
         print("No pretrained trunk model given, training trunk model...")
-        modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        # modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
+        modes = wandb.config['trunk_modes_svd']
+        # trunk_model = FFNet(in_size=1,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model = TrunkNet(in_size=256,out_size=modes,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
-        PHI = data['PHI_01'][:,:wandb.config['trunk_modes']].to(device)
+        name = f"PHI_{wandb.config['trunk_modes_svd']}"   # Using an f-string
+        PHI = data[name][:,:wandb.config['trunk_modes_svd']].to(device)
+        print('Training on ground truth PHI with shape:', PHI.shape)
         best_loss = 0.03
-        locations = data['Locations'].view(-1,1).to(device)
-        for epoch in range(0,200000):
+        locations = x_out_train.view(-1,1).to(device)
+        for epoch in range(0,100000):
         
             optimizer.zero_grad()
             PHI_pred = trunk_model(locations)
@@ -242,13 +254,13 @@ def main():
             'Trunk/Orthogonal_Loss': ortho_loss.item(),
             'Trunk/Norm_Loss': norm_loss.item(),
         })
-    
+
     ### Use pretrained trunk model ###
     else:
         print("Using pretrained trunk model...")
         modes = wandb.config['trunk_modes'] if wandb.config['trunk_modes']<int(train_data.state_dim) else int(train_data.state_dim)
         trunk_path = Path(sys_args.pretrained_trunk)
-        trunk_model = TrunkNet(in_size=256,out_size=100,hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.load_state_dict(torch.load(trunk_path))
         trunk_model.to(device)
         trunk_model.train()  
@@ -269,7 +281,8 @@ def main():
         'use_conv_encoder':wandb.config['use_conv_encoder'],
         'trunk_size_svd': wandb.config['trunk_size_svd'],
         'trunk_size_extra': wandb.config['trunk_size_extra'],
-        'trunk_modes':wandb.config['trunk_modes'],
+        'trunk_modes_svd':wandb.config['trunk_modes_svd'],
+        'trunk_modes_extra':wandb.config['trunk_modes_extra'],
         'NL_size':wandb.config['NL_size'],
         'use_batch_norm': False,
     }
@@ -326,9 +339,9 @@ def main():
 
     # Evaluate initial loss
     model.eval()
-    train_loss, train_loss_data = validate(train_dl,data['Locations'],train_loss_fn, model, device)
-    _, val_loss = validate(val_dl,data['Locations'],val_loss_fn, model, device)
-    _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model,device)
+    train_loss, train_loss_data = validate(train_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),train_loss_fn, model, device,selected_indices.to(device))
+    _, val_loss = validate(val_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),val_loss_fn, model, device,selected_indices.to(device))
+    _, test_loss = validate(test_dl,x_out_test.view(-1,1).to(device),x_in.view(-1,1).to(device),val_loss_fn, model,device,selected_indices_test.to(device))
 
     early_stop.step(val_loss)
     print(
@@ -347,13 +360,13 @@ def main():
             optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
 
         for example in train_dl:
-            train_step(example,data['Locations'],train_loss_fn, model, optimiser, device)
+            train_step(example,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),train_loss_fn, model, optimiser, device,selected_indices.to(device))
 
 
         model.eval()
-        train_loss, train_loss_data = validate(train_dl,data['Locations'], train_loss_fn, model, device)
-        _, val_loss = validate(val_dl, data['Locations'],val_loss_fn, model, device)
-        _, test_loss = validate(test_dl,data['Locations'],val_loss_fn, model, device)
+        train_loss, train_loss_data = validate(train_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),train_loss_fn, model, device,selected_indices.to(device))
+        _, val_loss = validate(val_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),val_loss_fn, model, device,selected_indices.to(device))
+        _, test_loss = validate(test_dl,x_out_test.view(-1,1).to(device),x_in.view(-1,1).to(device),val_loss_fn, model,device,selected_indices_test.to(device))
 
         sched.step(val_loss)
         early_stop.step(val_loss)

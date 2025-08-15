@@ -103,11 +103,14 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
     for d in train_data
     ], dim=0)
-    PHI_01, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.01,full_matrices=False)
-    PHI_05, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.05,full_matrices=False)
-    PHI_10, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.1,full_matrices=False)
-    PHI_20, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.2,full_matrices=False)
-    PHI_50, _, _ = torch.linalg.svd(states_combined.T + torch.randn_like(states_combined.T) * 0.5,full_matrices=False)
+    selected_indices_75 = torch.linspace(0, 100-1, steps=75).long()
+    selected_indices_50 = torch.linspace(0, 100-1, steps=50).long()
+    selected_indices_25 = torch.linspace(0, 100-1, steps=25).long()
+
+    PHI_75, _, _ = torch.linalg.svd(states_combined[:,selected_indices_75].T,full_matrices=False)
+    PHI_50, _, _ = torch.linalg.svd(states_combined[:,selected_indices_50].T,full_matrices=False)
+    PHI_25, _, _ = torch.linalg.svd(states_combined[:,selected_indices_25].T,full_matrices=False)
+
 
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
@@ -134,7 +137,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
 
-    return train_data, val_data, test_data, PHI_01, PHI_05, PHI_10, PHI_20, PHI_50
+    return train_data, val_data, test_data, PHI_75, PHI_50, PHI_25
 
 
 def make_trajectory_sampler(settings):
