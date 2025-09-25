@@ -174,6 +174,12 @@ def main():
                     type=str,
                     default=False,
                     help="Path to pretrained trunk model, if none is given the trunk will be trained before training the flow model.")
+
+
+    ap.add_argument('--pretrained_flow',
+                    type=str,
+                    default=False,
+                    help="Path to pretrained flow model, if model flow model will be initialized with this model. Make sure model hyperparameters of given model are the same as newly created model.")
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
@@ -295,14 +301,50 @@ def main():
     with open(model_save_dir / "metadata.yaml", 'w') as f:
         yaml.dump(model_metadata, f)
 
-    model = RHYME_XT(**model_args,trunk_model=trunk_model)
-    model.to(device)
+    # No pretrained flow model is given, train from scratch
+    if sys_args.pretrained_flow == False:
+        print("No pretrained flow model given, training from scratch...")
+        model = RHYME_XT(**model_args,trunk_model=trunk_model)
+        model.to(device)
 
-    # Freeze the pretrained model 
+    else: # pretrained flow model is given (pre-loading strategy)
+        print("Pretrained flow model given...")
+        flow_path = Path(sys_args.pretrained_flow)
+        model = RHYME_XT(**model_args,trunk_model=trunk_model)
+        model.load_state_dict(torch.load(flow_path))
+        model.trunk_svd = trunk_model  # Replace the loaded in trunk model with correct one
+        model.to(device)
+        model.train() 
+    
+
+    ### Optimization settings ###
+
+    # Uncomment parts to freeze certain parts of the model during training
+    # # Freeze encoder in flow model
+    # print("Freezing encoder in flow model...")
+    # for param in model.x_dnn.parameters():
+    #     param.requires_grad = False
+
+    # # Freeze RNN in flow model 
+    # print("Freezing rnn in flow model...")
+    # for param in model.u_rnn.parameters():
+    #     param.requires_grad = False
+
+    # # Freeze decoder in flow model 
+    # print("Freezing decoder in flow model...")
+    # for param in model.u_dnn.parameters():
+    #     param.requires_grad = False
+
+    # # Freeze decoder in flow model 
+    # print("Freezing nonlinearity in flow model...")
+    # for param in model.output_NN.parameters():
+    #     param.requires_grad = False
+
+    # Freeze the pretrained trunk model
+    print("Freezing trunk model...")
     for param in model.trunk_svd.parameters():
         param.requires_grad = False
 
-    ### Optimization settings ###
     optimiser = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=wandb.config['lr'])
 
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -351,6 +393,7 @@ def main():
         model.train()
         if epoch == wandb.config['unfreeze_epoch']:
             print("Unfreezing the pretrained model's layers for fine-tuning...")
+            # Unfreeze the trunk model
             for param in model.trunk_svd.parameters():
                 param.requires_grad = True
             optimiser = torch.optim.Adam(model.parameters(), lr=wandb.config['lr'])
