@@ -179,7 +179,7 @@ def main():
     ap.add_argument('--pretrained_flow',
                     type=str,
                     default=False,
-                    help="Path to pretrained flow model, if model flow model will be initialized with this model. Make sure model hyperparameters of given model are the same as newly created model.")
+                    help="Path to pretrained flow model, if a flow model is given it will used to initialize the flow model with. Hyperparameters must match.")
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
