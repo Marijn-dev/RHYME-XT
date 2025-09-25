@@ -1,0 +1,33 @@
+dynamics:
+  name: LIFBrian2 # Leaky Integrate and Fire
+  args:
+    x_lim: &x_lim 25 # Space [0, x_lim] [mm]
+    tau: 10 # Time cosntant in neuron equation [ms]
+    N: &N 100 # Neuron number [-]
+    theta: 1.0 # Activation threshold [-]
+    refractory: 5 # Sleeping time [ms]
+    reset_value: 0 # Reset value [-]
+    conduction_speed: 1 # [mm/ms]
+    kernel_type: 2 # 0: Guassian [scale,sigma], 1: Mex-hat [scale,a_ex, s_ex, a_in, s_in, w_in], 2: Oscillatory [A,b,alpha] 3: Cosinescale [scale,A1,A2,a1,a2]
+    ### Paper --> Guassian: [0.15, 0.0012], Mex-hat: [0.25, 1.0, 0.00065, 0.3, 0.0020, 0.0], Oscillatory: [0.00035, 200, 3000] ###
+    kernel_pars: [0.00035, 200, 3000]
+    delta: &delta 1
+    noise: 0.001 # Noise level (use to add noise in SVD calculation)
+
+sequence_generator:
+  name: StepBrian # multipe guassians
+  args:
+    step: False # True: step, False: gaussian
+    magnitudes: [1.1, 2.5]
+    period: 10 # dimensionless
+    dim: *N
+    amplitude: 2 # when step: True
+    std: 100 # when step: True
+
+initial_state_generator:
+  name: LifInitialState
+  args:
+    bumps: 2
+    N: *N # number of bumps
+
+control_delta: *delta # [ms]
