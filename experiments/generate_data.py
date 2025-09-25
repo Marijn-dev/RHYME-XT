@@ -63,8 +63,19 @@ def parse_args():
         help="Percentage of data used for validation and test sets",
         default=[20, 10])
 
-    return ap.parse_args()
+    ap.add_argument(
+        '--noise_std_svd',
+        type=float,
+        help="Standard deviation to add in SVD calculation (noisy training experiment)",
+        default=0.0)
+    
+    ap.add_argument(
+        '--num_locations_svd',
+        type=float,
+        help="Ratio of number of spatial locations to use in SVD calculation (spatial interpolation experiment)",
+        default=1.0)
 
+    return ap.parse_args()
 
 def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     if args.data_split[0] + args.data_split[1] >= 100:
@@ -88,10 +99,9 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     train_data = []
     for i in range(n_train):
         if i % 100 == 0:
-            print(f"Generating example {i+1}/{n_train}")
+            print(f"Generating training dataset example {i+1}/{n_train}")
         example = get_example()
         train_data.append(example)
-    # train_data = [get_example() for _ in range(n_train)]
     trajectory_sampler.reset_rngs()
 
     val_data = [get_example() for _ in range(n_val)]
@@ -103,15 +113,10 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
     for d in train_data
     ], dim=0)
-    selected_indices_75 = torch.linspace(0, 100-1, steps=75).long()
-    selected_indices_50 = torch.linspace(0, 100-1, steps=50).long()
-    selected_indices_25 = torch.linspace(0, 100-1, steps=25).long()
-
-    PHI_75, _, _ = torch.linalg.svd(states_combined[:,selected_indices_75].T,full_matrices=False)
-    PHI_50, _, _ = torch.linalg.svd(states_combined[:,selected_indices_50].T,full_matrices=False)
-    PHI_25, _, _ = torch.linalg.svd(states_combined[:,selected_indices_25].T,full_matrices=False)
-
-
+    
+    selected_indices = torch.linspace(0, states_combined.shape[1]-1, steps=int(states_combined.shape[1]*args.num_locations_svd)).long()
+    PHI, _, _ = torch.linalg.svd(states_combined[:, selected_indices].T + args.noise_std_svd * torch.randn_like(states_combined[:, selected_indices].T),full_matrices=False)
+    
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
                                       delta=trajectory_sampler._delta,
@@ -137,7 +142,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
 
-    return train_data, val_data, test_data, PHI_75, PHI_50, PHI_25
+    return train_data, val_data, test_data, PHI
 
 
 def make_trajectory_sampler(settings):
