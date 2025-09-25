@@ -23,28 +23,32 @@ def prep_inputs(x0, y, u, lengths, device):
     return x0, y, u, deltas
 
 
-def validate(data,locations_out,locations_in,loss_fn, model, device,selected_indices):
+def validate(data,locations_out,locations_in,loss_fn, model, device,selected_indices=None):
     vl = 0.
     data_loss_total = 0.
 
     with torch.no_grad():
         for example in data:
             x0, y, u, deltas = prep_inputs(*example, device)
-
             y_pred, basis_functions = model(x0, u, locations_out.to(device), deltas, locations_in.to(device))
-            y_subset = y[:, selected_indices]   
+            if selected_indices is None:
+                y_subset = y # use all y values if no indices are specified
+            else:
+                y_subset = y[:, selected_indices]   
             total_loss, data_loss = loss_fn(y_subset, y_pred,basis_functions)
             vl += total_loss.item()
             data_loss_total += data_loss.item() 
     return vl / len(data), data_loss_total / len(data)
 
-
-def train_step(example,locations_out,locations_in, loss_fn, model, optimizer, device,selected_indices):
+def train_step(example,locations_out,locations_in, loss_fn, model, optimizer, device,selected_indices=None):
     x0, y, u, deltas = prep_inputs(*example, device)
     optimizer.zero_grad()
 
     y_pred, basis_functions = model(x0, u, locations_out.to(device), deltas, locations_in.to(device))
-    y_subset = y[:, selected_indices]
+    if selected_indices is None:
+        y_subset = y # use all y values if no indices are specified
+    else:
+        y_subset = y[:, selected_indices]   
     total_loss, _ = loss_fn(y_subset, y_pred, basis_functions)
     total_loss.backward()
     optimizer.step()
