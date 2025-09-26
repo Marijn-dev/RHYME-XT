@@ -1,9 +1,10 @@
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib as mpl
 
-from flumen import CausalFlowModel
-from flumen.utils import pack_model_inputs
+from flumen import RHYME_XT, TrunkNet
+from flumen.utils import pack_model_inputs, plot_2D_trajectories, plot_heatmap, plot_slider, save_GIF
 from generate_data import make_trajectory_sampler
 
 from argparse import ArgumentParser
@@ -52,10 +53,17 @@ def main():
 
     pprint(metadata)
 
-    if args.print_info:
-        return
+    args = metadata["args"].copy()
+    args.pop("regular", None)
+    args.pop("trunk_modes", None)
+    args.pop("use_conv_encoder", None)
+    args["trunk_modes_svd"] = 100
+    args["trunk_modes_extra"] = 0
+    trunk_model = TrunkNet(in_size=256,out_size=100,hidden_size=[100,100,100,100],use_batch_norm=False)
+    args["trunk_model"] = trunk_model
+    model = RHYME_XT(**args)
+    # model = RHYME_XT(**metadata["args"])
 
-    model = CausalFlowModel(**metadata["args"])
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -63,67 +71,52 @@ def main():
     sampler.reset_rngs()
     delta = sampler._delta
 
-    fig, ax = plt.subplots(3, 1, sharex=True)
-    fig.canvas.mpl_connect('close_event', on_close_window)
-    xx = np.linspace(0., 1., model.output_dim)
-
     time_horizon = metadata["data_args"]["time_horizon"]
 
-    while True:
-        time_integrate = time()
-        x0, t, y, u = sampler.get_example(time_horizon=time_horizon,
-                                          n_samples=int(1 +
-                                                        100 * time_horizon))
-        time_integrate = time() - time_integrate
+    time_integrate = time()
+    x0, t, y, u,y_full = sampler.get_example(time_horizon=time_horizon,
+                                    n_samples=int(1 +
+                                                    1000))
+    time_integrate = time() - time_integrate
+    locations_output = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype())
+    locations_input = locations_output.clone()
 
-        time_predict = time()
+    time_predict = time()
 
-        x0_feed, t_feed, u_feed, deltas_feed = pack_model_inputs(
-            x0, t, u, delta)
+    x0_feed, t_feed, u_feed, deltas_feed = pack_model_inputs(
+        x0, t, u, delta)
 
-        with torch.no_grad():
-            y_pred = model(x0_feed, u_feed, deltas_feed).numpy()
+    with torch.no_grad():
+        y_pred, basis_functions = model(x0_feed, u_feed, locations_output,deltas_feed,locations_input)
+    y_pred = y_pred.cpu().numpy()
+    y_pred = np.flip(y_pred, 0)
+    time_predict = time() - time_predict
+    
+    print(f"Timings: {time_integrate}, {time_predict}")
 
-        y_pred = np.flip(y_pred, 0)
-        time_predict = time() - time_predict
+    y = y[:, tuple(bool(v) for v in sampler._dyn.mask)]
+    L1_error = np.abs(y - y_pred)
+    L2_error = np.square(y - y_pred)
+    print("MAE error:",np.mean(L1_error))
+    print("MSE error:",np.mean(L2_error))
 
-        print(f"Timings: {time_integrate}, {time_predict}")
+    # 2D Plot of slices in the trajectory
+    plot_2D_trajectories(
+    y, [y_pred], t_feed,
+    labels=['Ground-truth', 'RHYME-XT'],
+    time_indices=[int(y.shape[0]*0.25), int(y.shape[0]*0.5), int(y.shape[0]*0.95)],
+    space_indices=[int(y.shape[1]*0.25), int(y.shape[1]*0.5), int(y.shape[1]*0.95)])
 
-        y = y[:, tuple(bool(v) for v in sampler._dyn.mask)]
+    # Heatmap plot
+    plot_heatmap(
+    y, [y_pred], t_feed,
+    labels=['Ground-truth', 'RHYME-XT'])
 
-        sq_error = np.square(y - y_pred)
-        print(model.state_dim * np.mean(sq_error))
+    # Slider plot
+    plot_slider(y, [y_pred], t_feed, labels=['Ground-truth', 'RHYME-XT'])
 
-        if args.continuous_state:
-            ax[0].pcolormesh(t.squeeze(), xx, y.T)
-            ax[1].pcolormesh(t.squeeze(), xx, y_pred.T)
-        else:
-            for k, ax_ in enumerate(ax[:model.state_dim]):
-                ax_.plot(t, y_pred[:, k], c='orange', label='Model output')
-                ax_.plot(t, y[:, k], 'b--', label='True state')
-                ax_.set_ylabel(f"$x_{k+1}$")
-
-        ax[-1].step(np.arange(0., time_horizon, delta), u[:-1], where='post')
-        ax[-1].set_ylabel("$u$")
-        ax[-1].set_xlabel("$t$")
-
-        fig.tight_layout()
-        fig.subplots_adjust(hspace=0)
-        plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
-
-        plt.draw()
-
-        # Wait for key press
-        skip = False
-        while not skip:
-            skip = plt.waitforbuttonpress()
-
-        for ax_ in ax:
-            ax_.clear()
-
-
-def on_close_window(ev):
-    sys.exit(0)
+    # Save GIF
+    save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
 
 
 if __name__ == '__main__':

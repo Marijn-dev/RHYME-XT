@@ -6,6 +6,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 import torch.nn.functional as F
+import matplotlib as mpl
+from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.gridspec import GridSpec
+from matplotlib.widgets import Slider
 
 def print_gpu_info():
     if torch.cuda.is_available():
@@ -265,31 +269,7 @@ def plot_slider_1d(t,y,inputs,locations):
 
     plt.show()
 
-def plot_space_time_flat_trajectory(y, y_pred):
-    '''returns a flat space-time image of the field activity for both y and y_pred'''
-    # Convert to numpy for plotting
-    y_pred = torch.flip(y_pred, dims=[0])
-    y_np = y.detach().cpu().numpy()
-    y_np = np.transpose(y_np)
-    y_pred_np = y_pred.detach().cpu().numpy()
-    y_pred_np = np.transpose(y_pred_np)
-    
-    # Plot side-by-side heatmaps
-    fig, axs = plt.subplots(1, 2, figsize=(6, 3),dpi=80)
-
-    im0 = axs[0].imshow(y_np, aspect='auto', cmap='viridis',vmin=0, vmax=1)
-    axs[0].set_title("Ground Truth (y)")
-    plt.colorbar(im0, ax=axs[0])
-
-    im1 = axs[1].imshow(y_pred_np, aspect='auto', cmap='viridis')
-    axs[1].set_title("Prediction (y_pred)")
-    plt.colorbar(im1, ax=axs[1])
-
-    plt.tight_layout()
-    return fig
-
-
-def plot_space_time_flat_trajectory_V2(
+def plot_space_time_trajectory(
     y, y_pred,
     time_indices=[0, 20, 40, 60, 80],
     space_indices=[0, 25, 50, 75,99]
@@ -385,184 +365,346 @@ def plot_space_time_flat_trajectory_V2(
     return fig
 
 
-def plot_space_time_flat(t, y, u, locations):
-    """
-    Plots a flat space-time image of the field activity for both y and u.
-    """
-    x = locations
-    x_lim = locations[-1]
-
-    x_range = [0, x_lim]
-    t_range = [0.0, t[-1]]
-
-    # Limits for color scaling
-    upper_lim_y = y.max()
-    lower_lim_y = y.min()
-    
-    upper_lim_u = u.max()
-    lower_lim_u = u.min()
-
-    fig, axes = plt.subplots(1, 2, figsize=(6, 2))  # Two subplots side by side
-
-    # First subplot: y
-    pic1 = axes[0].imshow(np.transpose(y), cmap='plasma', vmin=lower_lim_y, vmax=upper_lim_y,
-                           extent=[t_range[0], t_range[1], x_range[0], x_range[1]],
-                           interpolation='nearest', origin='lower', aspect='auto')
-    axes[0].set_xlabel('t')
-    axes[0].set_ylabel('x', rotation=0)
-    axes[0].set_title('v(x,t)')
-    fig.colorbar(pic1, ax=axes[0])  # Colorbar for y
-
-    # Second subplot: u
-    pic2 = axes[1].imshow(np.transpose(u), cmap='plasma', vmin=lower_lim_u, vmax=upper_lim_u,
-                           extent=[t_range[0], t_range[1], x_range[0], x_range[1]],
-                           interpolation='nearest', origin='lower', aspect='auto')
-    axes[1].set_xlabel('t')
-    axes[1].set_ylabel('x', rotation=0)
-    axes[1].set_title('I(x,t)')
-    fig.colorbar(pic2, ax=axes[1])  # Colorbar for u
-
-    plt.tight_layout()
-    plt.gcf().set_dpi(300)
-    plt.show()
-
-
-def plot_space_time_3d(t,y,inputs,locations):
-    """
-    Plot a 3D surface of the field activity over space and time.
-    """
-
-    x = locations
-    
-    upper_lim_y = y.max()
-    lower_lim_y = y.min()
-
-    upper_lim_u = inputs.max()
-    lower_lim_u = inputs.min()
-
-    x_mesh, t_mesh = np.meshgrid(x, t)
-
-    fig = plt.figure(figsize=(16, 8))  # Wider figure for two subplots
-
-    # First subplot: y
-    ax1 = fig.add_subplot(121, projection='3d')  # 1 row, 2 columns, 1st subplot
-    surf1 = ax1.plot_surface(t_mesh, x_mesh, y, cmap='plasma', linewidth=0, antialiased=False)
-
-    ax1.xaxis.pane.fill = False
-    ax1.yaxis.pane.fill = False
-    ax1.zaxis.pane.fill = False
-    ax1.set_box_aspect([2, 1, 1])
-    ax1.set_xlabel('t', linespacing=3.2)
-    ax1.set_ylabel('x', linespacing=3.1)
-    ax1.set_zlabel('v(x,t)', linespacing=3.4, rotation=0)
-    ax1.set_zlim(lower_lim_y, upper_lim_y)
-
-    fig.colorbar(surf1, ax=ax1, shrink=0.4, aspect=10, pad=0.2)
-
-    # Second subplot: u
-    ax2 = fig.add_subplot(122, projection='3d')  # 1 row, 2 columns, 2nd subplot
-    surf2 = ax2.plot_surface(t_mesh, x_mesh, inputs, cmap='plasma', linewidth=0, antialiased=False)
-
-    ax2.xaxis.pane.fill = False
-    ax2.yaxis.pane.fill = False
-    ax2.zaxis.pane.fill = False
-    ax2.set_box_aspect([2, 1, 1])
-    ax2.set_xlabel('t', linespacing=3.2)
-    ax2.set_ylabel('x', linespacing=3.1)
-    ax2.set_zlabel('I(x,t)', linespacing=3.4, rotation=0)
-    ax2.set_zlim(lower_lim_u, upper_lim_u)
-
-    fig.colorbar(surf2, ax=ax2, shrink=0.4, aspect=10, pad=0.2)
-
-    plt.show()
-
-
-def plot_space_time_3d_mv(t, y, inputs, locations):
-    """
-    Plot 3D surfaces of field activities over space and time:
-    y[:,:,0] (v), y[:,:,1] (u), and external inputs.
-    """
-
-    x = locations
-    x_mesh, t_mesh = np.meshgrid(x, t)
-
-    y_u = y[:, :, 0]  # second field (u)
-    y_v = y[:, :, 1]  # first field (v)
-
-    fig = plt.figure(figsize=(24, 8))
-
-    # Plot y_v
-    ax1 = fig.add_subplot(131, projection='3d')
-    surf1 = ax1.plot_surface(t_mesh, x_mesh, y_v, cmap='plasma', linewidth=0, antialiased=False)
-    ax1.set_box_aspect([2, 1, 1])
-    ax1.set_xlabel('t')
-    ax1.set_ylabel('x')
-    ax1.set_zlabel('v(x,t)', rotation=0)
-    ax1.set_zlim(y_v.min(), y_v.max())
-    fig.colorbar(surf1, ax=ax1, shrink=0.4, aspect=10, pad=0.2)
-
-    # Plot y_u
-    ax2 = fig.add_subplot(132, projection='3d')
-    surf2 = ax2.plot_surface(t_mesh, x_mesh, y_u, cmap='plasma', linewidth=0, antialiased=False)
-    ax2.set_box_aspect([2, 1, 1])
-    ax2.set_xlabel('t')
-    ax2.set_ylabel('x')
-    ax2.set_zlabel('u(x,t)', rotation=0)
-    ax2.set_zlim(y_u.min(), y_u.max())
-    fig.colorbar(surf2, ax=ax2, shrink=0.4, aspect=10, pad=0.2)
-
-    # Plot input
-    ax3 = fig.add_subplot(133, projection='3d')
-    surf3 = ax3.plot_surface(t_mesh, x_mesh, inputs, cmap='plasma', linewidth=0, antialiased=False)
-    ax3.set_box_aspect([2, 1, 1])
-    ax3.set_xlabel('t')
-    ax3.set_ylabel('x')
-    ax3.set_zlabel('I(x,t)', rotation=0)
-    ax3.set_zlim(inputs.min(), inputs.max())
-    fig.colorbar(surf3, ax=ax3, shrink=0.4, aspect=10, pad=0.2)
-
-    plt.tight_layout()
-    plt.show()
-
-def plot_amari(plot,t,y,locations,inputs):
+def plot_2D_trajectories(
+    y, y_pred_list, t_feed,
+    labels=None,
+    time_indices=[25, 50, 75],
+    space_indices=[21, 50, 78]
+    ):
     '''
-    visualizes trajectory
+    Args:
+        y: Ground truth array of shape (nt, nx)
+        y_pred_list: List of prediction arrays, each of shape (nt, nx)
+        t_feed: Time array of shape (nt,)
+        labels: List of legend labels [ground_truth, pred1, pred2, ...]
     '''
+    
+    # === Plot style ===
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 22,
+        'axes.labelsize': 22,
+        'xtick.labelsize': 16,
+        'ytick.labelsize': 16,
+        'legend.fontsize': 20,
+        'font.size': 18,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [10, 4],  # width x height
+    })
+    colors = ["black", "#0072BD", "#D95319", "#77AC30", "#7E2F8E"]
+    linestyles = ['-', '--', ':', '-.', '-']
 
-    if plot == "slider_1d":
-        plot_slider_1d(t,y,inputs,locations)
+    y_np = y.T
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+    t_feed = np.array(t_feed)
+    t_feed = np.flip(t_feed)
+    all_data = [y_np] + y_pred_np_list
+    global_min = min(arr.min() for arr in all_data)
+    global_max = max(arr.max() for arr in all_data)
 
-    if plot == "space_time_1d":
-        plot_space_time_flat(t,y,inputs,locations)
+    x = np.linspace(0, 25, y.shape[1])
 
-    if plot == "space_time_3d":
-        plot_space_time_3d(t,y,inputs,locations)
+    n_cols = min(4, len(time_indices))
+    n_rows = 2
 
-    if plot == "space_time_3d_mv":
-        plot_space_time_3d_mv(t,y,inputs,locations)
+    fig, axs = plt.subplots(2, n_cols,dpi=100,
+                        sharex='row')
 
-if __name__ == "__main__":
+    if n_cols == 1:
+        axs = axs.reshape(n_rows, 1)
 
-    ## assign data corresponding to trajectory
-    data_path = Path("data/amari_coupled_difficult_theta1.pkl")
-    with data_path.open('rb') as f:
-        data = pickle.load(f)
+    x = np.linspace(0, 25, y.shape[1])
 
-    # get data from trajectory
-    current_trajectory = 0
-    trajectory = 4
-    for (x0, x0_n, t, y, y_n, u) in data['train']:
-        current_trajectory += 1
-        dt = t[1][0].numpy()
-        activity = y.numpy()
-        inputs = u.numpy()
-        t_lim = t[-1][0]
-        if current_trajectory == trajectory:
-            break
-    print(activity.shape)
-    print(inputs.shape)
-    plot_amari("space_time_3d_mv",t.numpy(),y.numpy(),data['Locations'].numpy(),u.numpy())
-    plot_amari("space_time_1d",t.numpy(),y[:,:,0].numpy(),data['Locations'].numpy(),u.numpy())
-    plot_amari("space_time_1d",t.numpy(),y[:,:,1].numpy(),data['Locations'].numpy(),u.numpy())
-    # plot_amari("space_time_2dd",t.numpy(),y.numpy(),data['Locations'].numpy(),u.numpy())
-    # plot_amari("space_time_3d",trajectory=1)
+    for i, t in enumerate(time_indices):
+        ax = axs[0,i]
+        ax.plot(x, y_np[:, t], label=labels[0], color=colors[0], linestyle=linestyles[0])
+        for j, y_pred_np in enumerate(y_pred_np_list):
+            ax.plot(x, y_pred_np[:, t],
+                    label=labels[j + 1] if labels else f"Pred {j+1}",
+                    color=colors[(j + 1) % len(colors)],
+                    linestyle=linestyles[(j + 1) % len(linestyles)])
+        ax.set_ylim(global_min, global_max)
+        ax.set_title(f"b = {t_feed[t].item():.1f}")
+        ax.grid(True)
+        # Remove individual labels
+        ax.set_xlabel('x')
+    
+
+    for i, idx in enumerate(space_indices):
+        ax = axs[1, i]
+        ax.plot(t_feed, y_np[idx, :], label=labels[0], color=colors[0], linestyle=linestyles[0])
+        for j, y_pred_np in enumerate(y_pred_np_list):
+            ax.plot(t_feed, y_pred_np[idx, :],
+                    label=labels[j + 1] if labels else f"Pred {j+1}",
+                    color=colors[(j + 1) % len(colors)],
+                    linestyle=linestyles[(j + 1) % len(linestyles)])
+        ax.set_ylim(global_min, global_max)
+        ax.set_title(f"a = {x[idx]:.0f}")
+        ax.grid(True)
+        # Remove individual labels
+        ax.set_xlabel('t')
+        ax.set_ylabel('')
+
+   
+    fig.text(0.01, 0.70,r'u(x,t=b)', va='center', ha='center',
+         rotation='vertical', fontsize=20)
+
+    # Second row shared y-axis label
+    fig.text(0.01, 0.30, r'u(x=a,t)', va='center', ha='center',
+         rotation='vertical', fontsize=20)
+
+    # Add legend as before
+    handles, legend_labels = axs[0, 0].get_legend_handles_labels()
+    legend = fig.legend(handles, legend_labels,
+                        loc='center right',
+                        frameon=True,
+                        framealpha=1.0,
+                        edgecolor='black',
+                        facecolor='white',
+                        ncol=1)
+    legend.set_draggable(True)
+
+    fig.tight_layout(rect=[0.02, 0.02, 1, 1],h_pad=2.0,w_pad=1)  # leave space for labels and legend
+    plt.show()
+
+def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
+    n_preds = len(y_pred_list)
+
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 18,
+        'axes.labelsize': 18,
+        'xtick.labelsize': 16,
+        'ytick.labelsize': 16,
+        'legend.fontsize': 20,
+        'font.size': 18,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [10, 4 * (n_preds + 0.9)],  # width fixed, height scales
+    })
+
+    y_true_np = y_true.T
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+
+    extent = [0, 50, 0, 25]
+    vmin = 0
+    vmax = 1
+
+    h_ratios = [1.0] + [1]*n_preds
+    fig = plt.figure(constrained_layout=True)
+    gs = GridSpec(n_preds + 1, 2, figure=fig, height_ratios=h_ratios, width_ratios=[1, 1], wspace=0.0001,hspace=0.002)
+
+    # Reference plot spanning both columns in first row
+    ax_ref = fig.add_subplot(gs[0, :])
+    im_ref = ax_ref.imshow(y_true_np, aspect='auto', origin='lower',
+                           cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+    ref_title = labels[0] if labels and len(labels) > 0 else "Reference"
+    ax_ref.set_aspect(0.30) 
+    ax_ref.set_title(ref_title)
+    ax_ref.set_xlabel('t')
+    ax_ref.set_ylabel('x')
+
+    # Prediction and error plots below
+    for i in range(n_preds):
+        ax_pred = fig.add_subplot(gs[i + 1, 0])
+        ax_err = fig.add_subplot(gs[i + 1, 1])
+        ax_row_title = fig.add_subplot(gs[i + 1, :])
+        ax_row_title.axis('off')  # hide axis lines and ticks
+        pred_title = labels[i + 1] if labels and len(labels) > i + 1 else f"Prediction {i + 1}"
+        ax_row_title.set_title(pred_title, pad=10)
+
+        pred = y_pred_np_list[i]
+        im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
+                                cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+        ax_pred.set_title(r"$\tilde{u}(x,t)$")
+        ax_pred.set_xlabel('t')
+        ax_pred.set_ylabel('x')
+
+        error = np.abs(pred - y_true_np)
+        im_err = ax_err.imshow(error, aspect='auto', origin='lower',
+                               cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+        ax_err.set_title(r"$|u(x,t)-\tilde{u}(x,t)|$")
+        ax_err.set_xlabel('t')
+        ax_err.set_ylabel('x')
+
+    # # Shared colorbars: predictions left column, errors right column
+    # cbar_pred = fig.colorbar(im_pred, ax=fig.get_axes()[1::2], orientation='vertical', fraction=0.03, pad=0.02)
+    # cbar_pred.set_label("")
+
+    cbar_err = fig.colorbar(im_err, ax=fig.get_axes()[2::2], orientation='vertical', fraction=0.03, pad=0.02)
+    cbar_err.set_label("")
+    plt.show()
+
+def save_GIF(
+    y, y_pred_list, t_feed,
+    labels=None,
+    filename="trajectory.gif",
+    fps=50
+    ):
+
+    print(f"Creating GIF to save to {filename}...")
+    # === Plot style ===
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 18,
+        'axes.labelsize': 18,
+        'xtick.labelsize': 14,
+        'ytick.labelsize': 14,
+        'legend.fontsize': 14,
+        'font.size': 16,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [10, 6],
+    })
+    colors = ["black", "#0072BD", "#D95319", "#77AC30", "#7E2F8E"]
+    linestyles = ['-', '--', ':', '-.', '-']
+
+    # Process data
+    y_np = y.T  # (nx, nt)
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list] # if taking predictions
+    t_feed = np.array(t_feed)
+    t_feed = np.flip(t_feed)
+    all_data = [y_np] + y_pred_np_list
+    global_min = min(arr.min() for arr in all_data)
+    global_max = max(arr.max() for arr in all_data)
+
+    x = np.linspace(0, 25, y.shape[1])
+    nt = y.shape[0]
+
+    # Set up figure
+    fig, ax = plt.subplots()
+    ax.set_xlim(x.min(), x.max())
+    ax.set_ylim(global_min, global_max)
+    ax.set_xlabel("x")
+    ax.set_ylabel("u(x,t)")
+    title = ax.set_title("")
+
+    # Plot ground truth
+    lines = []
+    line_gt, = ax.plot([], [], label=labels[0] if labels else "Ground Truth",
+                       color=colors[0], linestyle=linestyles[0])
+    lines.append(line_gt)
+
+    # Predictions
+    for j, _ in enumerate(y_pred_np_list):
+        line_pred, = ax.plot([], [], label=labels[j+1] if labels else f"Pred {j+1}",
+                             color=colors[(j+1) % len(colors)],
+                             linestyle=linestyles[(j+1) % len(linestyles)])
+        lines.append(line_pred)
+
+    # Uncomment if you want to see the activatation threshold
+    # Constant θ line (doesn't change)
+    # line_const, = ax.plot(x, np.ones_like(x),
+    #                       label=r'$\theta$',
+    #                       color="red", linestyle="--")
+    # Not added to lines → so update() won't touch it
+
+    ax.legend()
+
+    # Update function
+    def update(frame):
+        # Update ground truth
+        lines[0].set_data(x, y_np[:, frame])
+        # Update predictions
+        for j, y_pred_np in enumerate(y_pred_np_list):
+            lines[j+1].set_data(x, y_pred_np[:, frame])
+        title.set_text(f"t = {t_feed[frame].item():.2f}")
+        return lines + [title]
+
+    # Create animation
+    anim = FuncAnimation(fig, update, frames=nt, interval=1500/fps, blit=True)
+
+    # Save to GIF
+    anim.save(filename, writer=PillowWriter(fps=fps))
+
+    plt.close(fig)
+
+def plot_slider(
+    y, y_pred_list, t_feed,
+    labels=None,
+):
+    # === Plot style ===
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 18,
+        'axes.labelsize': 18,
+        'xtick.labelsize': 14,
+        'ytick.labelsize': 14,
+        'legend.fontsize': 14,
+        'font.size': 16,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [10, 6],
+    })
+
+    colors = ["black", "#0072BD", "#D95319", "#77AC30", "#7E2F8E"]
+    linestyles = ['-', '--', ':', '-.', '-']
+
+    # Process data
+    y_np = y.T  # (nx, nt)
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list] 
+    t_feed = np.array(t_feed)
+    t_feed = np.flip(t_feed)
+    all_data = [y_np] + y_pred_np_list
+    global_min = min(arr.min() for arr in all_data)
+    global_max = max(arr.max() for arr in all_data)
+
+    x = np.linspace(0, 25, y.shape[1])
+    nt = y.shape[0]
+
+    # Set up figure
+    fig, ax = plt.subplots()
+    plt.subplots_adjust(bottom=0.25)  # leave space for slider
+    ax.set_xlim(x.min(), x.max())
+    ax.set_ylim(global_min, global_max)
+    ax.set_xlabel("x")
+    ax.set_ylabel("u(x,t)")
+    title = ax.set_title("")
+
+    # Plot ground truth
+    lines = []
+    line_gt, = ax.plot([], [], label=labels[0] if labels else "Ground Truth",
+                       color=colors[0], linestyle=linestyles[0])
+    lines.append(line_gt)
+
+    # Predictions
+    for j, _ in enumerate(y_pred_np_list):
+        line_pred, = ax.plot([], [], label=labels[j+1] if labels else f"Pred {j+1}",
+                             color=colors[(j+1) % len(colors)],
+                             linestyle=linestyles[(j+1) % len(linestyles)])
+        lines.append(line_pred)
+
+    ax.legend()
+
+    # Initialize first frame
+    def update_plot(frame):
+        lines[0].set_data(x, y_np[:, frame])
+        for j, y_pred_np in enumerate(y_pred_np_list):
+            lines[j+1].set_data(x, y_pred_np[:, frame])
+        title.set_text(f"t = {t_feed[frame].item():.2f}")
+        fig.canvas.draw_idle()
+
+    # Draw initial state
+    update_plot(0)
+
+    # Slider axis
+    ax_slider = plt.axes([0.2, 0.1, 0.65, 0.03])  
+    slider = Slider(ax_slider, 'Frame', 0, nt-1, valinit=0, valstep=1)
+
+    # Connect slider to update function
+    def on_change(val):
+        frame = int(slider.val)
+        update_plot(frame)
+
+    slider.on_changed(on_change)
+
+    plt.show()

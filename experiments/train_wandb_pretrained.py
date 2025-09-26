@@ -5,7 +5,7 @@ import pickle, yaml
 from pathlib import Path
 from flumen import print_gpu_info, TrajectoryDataset, TrunkNet,RHYME_XT
 from flumen.train import EarlyStopping, train_step, validate
-from flumen.utils import trajectory,plot_space_time_flat_trajectory, plot_space_time_flat_trajectory_V2
+from flumen.utils import trajectory,plot_space_time_trajectory
 from argparse import ArgumentParser
 import time
 import matplotlib.pyplot as plt
@@ -430,7 +430,7 @@ def main():
             y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],trajectory_index=0,delta=test_data.delta) 
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),x_out_test.view(-1,1).to(device),deltas_feed.to(device),x_in.view(-1,1).to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
-            fig = plot_space_time_flat_trajectory_V2(y,y_pred)
+            fig = plot_space_time_trajectory(y,y_pred)
             wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
 
         wandb.log({
