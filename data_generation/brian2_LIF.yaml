@@ -14,7 +14,7 @@ dynamics:
     delta: &delta 1
 
 sequence_generator:
-  name: StepBrian # multipe guassians
+  name: LIF_input # multipe guassians
   args:
     step: False # True: step, False: gaussian
     magnitudes: [1.1, 2.5]
