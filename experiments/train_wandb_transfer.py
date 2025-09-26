@@ -37,7 +37,7 @@ hyperparams = {
     'trunk_size_svd':[100,100,100,100], # hidden size of the trunk modeled as SVD
     'trunk_size_extra':[100,100,100], # hidden size of the trunk modeled as extra layers
     'NL_size':[50,50], # hidden size of nonlinearity at end, only used if use_nonlinear is True
-    'trunk_modes':200,   # if bigger than state dim, second trunk_extra will be used
+    'trunk_modes':100,   # if bigger than state dim, second trunk_extra will be used
     'lr': 0.00001,
     'max_seq_len': 20,  # Maximum sequence length for training dataset (-1 for full sequences)
     'n_samples': 4, # Number of samples to use for training dataset when max_seq_len is NOT set to -1
