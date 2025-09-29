@@ -218,8 +218,7 @@ def main():
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
-        name = f"PHI_{wandb.config['trunk_modes_svd']}"   
-        PHI = data[name][:,:wandb.config['trunk_modes_svd']].to(device)
+        PHI = data["PHI"][:,:wandb.config['trunk_modes_svd']].to(device)
         print('Training on ground truth PHI with shape:', PHI.shape)
         best_loss = 0.03 # hardcoded so that it only saves models after this loss
         locations = x_out_train.view(-1,1).to(device)
