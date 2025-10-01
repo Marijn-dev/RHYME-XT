@@ -2,6 +2,8 @@
 
 ![Trajectory Animation](assets/trajectory.gif)
 
+![Visualization of the architecture](assets/Architecture.png)
+
 See paper [Marijn Ruiter, _RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms_ (2025)](-) for a description of the architecture.
 
 The `flumen` package provides the PyTorch module implementing the architecture,
