@@ -26,20 +26,20 @@ hyperparams = {
     'use_nonlinear':True,                   # True: Nonlinearity, False: Inner product
     'NL_size':[50,50],                      # Hidden size of nonlinearity at end
     'IC_encoder_decoder':False,             # True: Initial Condition encoder decoder, False: Regular
-    'trunk_modes_svd':25,                   # Number of modes used from SVD, max value = min(Nx,trunk_modes_svd)   
+    'trunk_modes_svd':100,                   # Number of modes used from SVD, max value = min(Nx,trunk_modes_svd)   
     'trunk_size_svd':[100,100,100,100],     # Hidden size of the trunk net modelled after the SVD
-    'trunk_modes_extra':75,                 # Number of extra modes added to the trunk net       
+    'trunk_modes_extra':0,                 # Number of extra modes added to the trunk net       
     'trunk_size_extra':[100,100,100],       # Hidden size of the added trunk net
     'lr': 0.00011614090101177696,
     'max_seq_len': 20,                      # Maximum sequence length used for training, -1 for full sequences
     'n_samples': 4,                         # Number of samples to use for training when max_seq_len is not -1
-    'n_epochs': 10,
+    'n_epochs': 2,
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
     'num_locations': 1.0,                   # Ratio of equispaced output sensor locations used for training, 1: all locations, 0.5: half the locations etc
-    'train_loss': "L1_orthogonal",
+    'train_loss': "L1",
     'val_loss': "L1"
 }
 
@@ -220,7 +220,7 @@ def main():
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
         PHI = data["PHI"][:,:wandb.config['trunk_modes_svd']].to(device)
         print('Training on ground truth PHI with shape:', PHI.shape)
-        best_loss = 0.03 # hardcoded so that it only saves models after this loss
+        best_loss = 0.03 # hardcoded so avoid saving too much
         locations = x_out_train.view(-1,1).to(device)
         for epoch in range(0,100000):
         
@@ -413,33 +413,37 @@ def main():
         else:
             train_loss_ortho = float("nan")
         print(
-            f"{0:>5d} :: {train_loss_total:>16e} :: {train_loss_data:>16e} :: {train_loss_ortho:>16e} :: " \
+            f"{epoch:>5d} :: {train_loss_total:>16e} :: {train_loss_data:>16e} :: {train_loss_ortho:>16e} :: " \
             f"{val_loss_data:>16e} :: {test_loss_data:>16e}  :: {early_stop.best_val_loss:>16e}"
         )
         if early_stop.best_model:
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
-            run.summary["Flownet/best_train"] = train_loss_total
-            run.summary["Flownet/best_val"] = val_loss_data
-            run.summary["Flownet/best_test"] = test_loss_data
-            run.summary["Flownet/best_epoch"] = epoch + 1
+            run.summary["RHYME-xt/best_train"] = train_loss_total
+            run.summary["RHYME-xt/best_val"] = val_loss_data
+            run.summary["RHYME-xt/best_test"] = test_loss_data
+            run.summary["RHYME-xt/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
             y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],trajectory_index=0,delta=test_data.delta) 
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),x_out_test.view(-1,1).to(device),deltas_feed.to(device),x_in.view(-1,1).to(device))
             test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
-            fig = plot_space_time_trajectory(y,y_pred)
-            wandb.log({"Flownet/Test trajectory": wandb.Image(fig),"Flownet/Best_epoch": epoch+1})
+            time_dim, space_dim = y.shape
+
+            time_indices=[0, int(time_dim*0.25), int(time_dim*0.5),  int(time_dim*0.75), int(time_dim*0.95)]    # depends on n_samples
+            space_indices=[0, int(space_dim*0.25), int(space_dim*0.5), int(space_dim*0.75),int(space_dim*0.95)] # depends on n_neurons
+            fig = plot_space_time_trajectory(y,y_pred,time_indices=time_indices,space_indices=space_indices)
+            wandb.log({"RHYME-xt/Test trajectory": wandb.Image(fig),"RHYME-xt/Best_epoch": epoch+1})
 
         wandb.log({
-            'Flownet/time': time.time() - start,
-            'Flownet/epoch': epoch + 1,
-            'Flownet/lr': sched.get_last_lr()[0],
-            'Flownet/train_loss_total': train_loss_total,
-            'Flownet/train_loss_data': train_loss_data,
-            'Flownet/val_loss': val_loss_data,
-            'Flownet/test_loss': test_loss_data,
+            'RHYME-xt/time': time.time() - start,
+            'RHYME-xt/epoch': epoch + 1,
+            'RHYME-xt/lr': sched.get_last_lr()[0],
+            'RHYME-xt/train_loss_total': train_loss_total,
+            'RHYME-xt/train_loss_data': train_loss_data,
+            'RHYME-xt/val_loss': val_loss_data,
+            'RHYME-xt/test_loss': test_loss_data,
         })
 
         if early_stop.early_stop:
