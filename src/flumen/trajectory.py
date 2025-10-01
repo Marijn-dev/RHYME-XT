@@ -53,10 +53,6 @@ class RawTrajectoryDataset(Dataset):
                              std=noise_std,
                              size=self.state[-1].size()))
             
-            # transform inputs
-            # if self.input_mask is not None:
-            #     self.control_dim = sample['control'].shape[1]
-
             self.control_seq.append(
                 torch.from_numpy(sample['control']).type(
                     torch.get_default_dtype()).reshape((-1, self.control_dim)))
@@ -141,10 +137,11 @@ class TrajectoryDataset(Dataset):
                     times = (t - t[k_s] - max_seq_len * self.delta)
                     times[times > 0] = 0.
                     k_l = times.argmax().item()
-
                     if k_l == k_s:
                         end_idxs = (0, )
                     else:
+                        if k_l - k_s == -1:  # avoid -1
+                            break
                         end_idxs = rng.choice(k_l - k_s,
                                               size=min(n_samples, k_l - k_s),
                                               replace=False)
