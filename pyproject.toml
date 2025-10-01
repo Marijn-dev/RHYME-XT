@@ -3,17 +3,17 @@ requires = ["setuptools >= 64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "flumen"
+name = "RHYME-XT"
 dynamic = ["version"]
-authors = [{name = "Miguel Aguiar", email = "aguiar@kth.se"}]
-description = "A neural architecture for approximating flows of dynamical systems with inputs"
+authors = [{name = "Marijn Ruiter", email = "marijnruiter09@gmail.com"}]
+description = "A neural operator for modelling exctiable spatio-temporal rhythms"
 readme = "README.md"
 license = { file = "LICENSE" }
 dependencies = ["numpy>=1.18", "torch>=1.8.0"]
 requires-python = ">= 3.6"
 
 [project.urls]
-Repository = "https://github.com/mcpca/flumen.git"
+Repository = "https://github.com/Marijn-dev/RHYME-XT"
 
 [project.optional-dependencies]
 experiments = ["wandb", "semble", "scipy>=1.5"]
