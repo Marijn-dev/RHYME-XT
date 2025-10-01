@@ -1,6 +1,6 @@
 # RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms
 
-![Trajectory Animation](trajectory.gif)
+![Trajectory Animation](assets/trajectory.gif)
 
 See paper [Marijn Ruiter, _RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms_ (2025)](-) for a description of the architecture.
 
