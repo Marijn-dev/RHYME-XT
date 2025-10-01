@@ -34,7 +34,7 @@ def parse_args():
     ap.add_argument('--time_horizon',
                     type=float,
                     help="Time horizon",
-                    default=10.)
+                    default=50.)
 
     ap.add_argument('--n_trajectories',
                     type=int,

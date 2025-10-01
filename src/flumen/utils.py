@@ -271,8 +271,8 @@ def plot_slider_1d(t,y,inputs,locations):
 
 def plot_space_time_trajectory(
     y, y_pred,
-    time_indices=[0, 20, 40, 60, 80],
-    space_indices=[0, 25, 50, 75,99]
+    time_indices=[0, 20, 40, 60, 80],   # depends on n_samples
+    space_indices=[0, 25, 50, 75,99]    # depends on n_neurons
 ):
     '''Returns:
        - Heatmaps: Ground truth, Prediction, Absolute Error.
