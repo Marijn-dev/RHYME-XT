@@ -9,7 +9,7 @@ and some auxiliary functions which can be used for training.
 
 This repository also contains scripts to train a model using synthetic data.
 To generate the data, the [`semble`](https://github.com/Marijn-dev/semble) package is required.
-To learn e.g. the Van der Pol dynamics, first create a data file as follows:
+First create a data file as follows:
 
 ```shell
   python experiments/semble_generate.py --n_trajectories 500 --n_samples 200 data_generation/brian2_LIF.yaml LIF_test_data
