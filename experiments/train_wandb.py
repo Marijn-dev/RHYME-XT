@@ -3,9 +3,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import pickle, yaml
 from pathlib import Path
-from flumen import print_gpu_info, TrajectoryDataset, TrunkNet,RHYME_XT
-from flumen.train import EarlyStopping, train_step, validate
-from flumen.utils import trajectory,plot_space_time_trajectory
+from RHYME_XT import print_gpu_info, TrajectoryDataset, TrunkNet,RHYME_XT_Model
+from RHYME_XT.train import EarlyStopping, train_step, validate
+from RHYME_XT.utils import trajectory,plot_space_time_trajectory
 from argparse import ArgumentParser
 import time
 import matplotlib.pyplot as plt
@@ -26,14 +26,17 @@ hyperparams = {
     'use_nonlinear':True,                   # True: Nonlinearity, False: Inner product
     'NL_size':[50,50],                      # Hidden size of nonlinearity at end
     'IC_encoder_decoder':False,             # True: Initial Condition encoder decoder, False: Regular
-    'trunk_modes_svd':100,                   # Number of modes used from SVD, max value = min(Nx,trunk_modes_svd)   
+    'trunk_modes_svd':100,                  # Number of modes used from SVD, max value = min(Nx,trunk_modes_svd)   
     'trunk_size_svd':[100,100,100,100],     # Hidden size of the trunk net modelled after the SVD
-    'trunk_modes_extra':0,                 # Number of extra modes added to the trunk net       
+    'fourier_features': 128,                # Number of fourier features to use in the svd trunk net 
+    'trunk_modes_extra':0,                  # Number of extra modes added to the trunk net       
     'trunk_size_extra':[100,100,100],       # Hidden size of the added trunk net
+    'location_scaling':100,                 # Scale the location inputs to the trunk net by this factor (normalization)
     'lr': 0.00011614090101177696,
     'max_seq_len': 20,                      # Maximum sequence length used for training, -1 for full sequences
     'n_samples': 4,                         # Number of samples to use for training when max_seq_len is not -1
-    'n_epochs': 2,
+    'n_epochs': 10,                          # Number of epochs to train complete model for
+    'n_epochs_trunk': 1000,                  # Number of epochs to train trunk model for (only used if no pretrained trunk is given)
     'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
@@ -173,17 +176,17 @@ def main():
     ap.add_argument('--pretrained_trunk',
                     type=str,
                     default=False,
-                    help="Path to pretrained trunk model, if none is given the trunk will be trained before training the flow model.")
+                    help="Path to pretrained trunk model, if none is given the trunk will be trained before training the branch model.")
 
 
-    ap.add_argument('--pretrained_flow',
+    ap.add_argument('--pretrained_branch',
                     type=str,
                     default=False,
-                    help="Path to pretrained flow model, if a flow model is given it will used to initialize the flow model with. Hyperparameters must match.")
+                    help="Path to pretrained model, if a model is given it will used to initialize the new model with. Hyperparameters must match.")
     
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='brian2_LIF', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='RHYME-XT', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
@@ -203,7 +206,7 @@ def main():
     test_data = TrajectoryDataset(data["test"])
 
     ### Select locations for training ###
-    scaling = 100 # scale locations values
+    scaling = wandb.config['location_scaling'] # scale locations values
     locations = data['Locations']*scaling
     steps = int(int(train_data.state_dim) * wandb.config['num_locations'])  # Number of locations to use for training
     selected_indices = torch.linspace(0, int(train_data.state_dim)-1, steps=steps).long() # Pick locations for training
@@ -214,32 +217,20 @@ def main():
     ### Pretrain Trunknet if no pretrained trunk is given ###
     if sys_args.pretrained_trunk == False:
         print("No pretrained trunk model given, training trunk model...")
-        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=2,fourier_features=wandb.config['fourier_features'],out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.to(device)
         trunk_model.train()
         optimizer = torch.optim.Adam(trunk_model.parameters(), lr=1e-3)
         PHI = data["PHI"][:,:wandb.config['trunk_modes_svd']].to(device)
         print('Training on ground truth PHI with shape:', PHI.shape)
-        best_loss = 0.03 # hardcoded so avoid saving too much
         locations = x_out_train.view(-1,1).to(device)
-        for epoch in range(0,100000):
+        for epoch in range(0,wandb.config['n_epochs_trunk']):
         
             optimizer.zero_grad()
             PHI_pred = trunk_model(locations)
             total, rec_loss, ortho_loss, norm_loss = total_loss(PHI, PHI_pred, alpha=1.0, beta=0.1)  # Get all losses
             total.backward()
             optimizer.step()
-
-            # Save the model when new best loss is obtained
-            if total.item() < best_loss:
-                best_loss = total.item()
-                
-                model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
-
-                torch.save(trunk_model.state_dict(), f"{model_name}.pth")
-                artifact = wandb.Artifact(name=f"{model_name}", type="model")
-                artifact.add_file(f"{model_name}.pth")
-                wandb.log_artifact(artifact)
 
             # Log the loss
             if epoch % 5000 == 0: 
@@ -253,6 +244,13 @@ def main():
             'Trunk/Orthogonal_Loss': ortho_loss.item(),
             'Trunk/Norm_Loss': norm_loss.item(),
         })
+            
+        # Save the trunk model
+        model_name = f"trunk_model-{data_path.stem}-{sys_args.name}"
+        torch.save(trunk_model.state_dict(), f"{model_name}.pth")
+        artifact = wandb.Artifact(name=f"{model_name}", type="model")
+        artifact.add_file(f"{model_name}.pth")
+        wandb.log_artifact(artifact)
 
     ### Use pretrained trunk model ###
     else:
@@ -263,7 +261,7 @@ def main():
         trunk_model.to(device)
         trunk_model.train()  
 
-    model_args = {
+    RHYME_XT_model_args = {
         'state_dim': int(train_data.state_dim),
         'control_dim': int(train_data.control_dim),
         'output_dim': int(train_data.output_dim),
@@ -283,13 +281,24 @@ def main():
         'use_batch_norm': False,
     }
 
+    trunk_args = {
+        'in_size': 2,
+        'fourier_features': wandb.config['fourier_features'],
+        'out_size': wandb.config['trunk_modes_svd'],
+        'hidden_size': wandb.config['trunk_size_svd'],
+        'use_batch_norm': False
+    }
+
     model_metadata = {
-        'args': model_args,
+        'args': RHYME_XT_model_args,
+        'trunk_args': trunk_args,
+        'location_scaling': scaling,
         'data_path': data_path.absolute().as_posix(),
         'data_settings': data["settings"],
         'data_args': data["args"]
     }
-    model_name = f"flow_model-{data_path.stem}-{sys_args.name}"
+
+    model_name = f"RHYME_XT_model-{data_path.stem}-{sys_args.name}"
 
     # Prepare for saving the model 
     model_save_dir = Path(
@@ -300,17 +309,17 @@ def main():
     with open(model_save_dir / "metadata.yaml", 'w') as f:
         yaml.dump(model_metadata, f)
 
-    # No pretrained flow model is given, train from scratch
-    if sys_args.pretrained_flow == False:
-        print("No pretrained flow model given, training from scratch...")
-        model = RHYME_XT(**model_args,trunk_model=trunk_model)
+    # No pretrained branch model is given, train from scratch
+    if sys_args.pretrained_branch == False:
+        print("No pretrained branch model given, training from scratch...")
+        model = RHYME_XT_Model(**RHYME_XT_model_args,trunk_model=trunk_model)
         model.to(device)
 
-    else: # pretrained flow model is given (pre-loading strategy)
-        print("Pretrained flow model given...")
-        flow_path = Path(sys_args.pretrained_flow)
-        model = RHYME_XT(**model_args,trunk_model=trunk_model)
-        model.load_state_dict(torch.load(flow_path))
+    else: # pretrained branch model is given (pre-loading strategy)
+        print("Pretrained branch model given...")
+        RHYME_XT_path = Path(sys_args.pretrained_branch)
+        model = RHYME_XT_Model(**RHYME_XT_model_args,trunk_model=trunk_model)
+        model.load_state_dict(torch.load(RHYME_XT_path))
         model.trunk_svd = trunk_model  # Replace the loaded in trunk model with correct one
         model.to(device)
         model.train() 
@@ -319,23 +328,23 @@ def main():
     ### Optimization settings ###
 
     # Uncomment parts to freeze certain parts of the model during training
-    # # Freeze encoder in flow model
-    # print("Freezing encoder in flow model...")
+    # # Freeze encoder in branch model
+    # print("Freezing encoder in branch model...")
     # for param in model.x_dnn.parameters():
     #     param.requires_grad = False
 
-    # # Freeze RNN in flow model 
-    # print("Freezing rnn in flow model...")
+    # # Freeze RNN in branch model 
+    # print("Freezing rnn in branch model...")
     # for param in model.u_rnn.parameters():
     #     param.requires_grad = False
 
-    # # Freeze decoder in flow model 
-    # print("Freezing decoder in flow model...")
+    # # Freeze decoder in branch model 
+    # print("Freezing decoder in branch model...")
     # for param in model.u_dnn.parameters():
     #     param.requires_grad = False
 
-    # # Freeze decoder in flow model 
-    # print("Freezing nonlinearity in flow model...")
+    # # Freeze decoder in branch model 
+    # print("Freezing nonlinearity in branch model...")
     # for param in model.output_NN.parameters():
     #     param.requires_grad = False
 
@@ -400,7 +409,6 @@ def main():
         for example in train_dl:
             train_step(example,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),train_loss_fn, model, optimiser, device,selected_indices.to(device))
 
-
         model.eval()
         train_loss_total, train_loss_data = validate(train_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),train_loss_fn, model, device,selected_indices.to(device))
         _, val_loss_data = validate(val_dl,x_out_train.view(-1,1).to(device),x_in.view(-1,1).to(device),val_loss_fn, model, device,selected_indices.to(device))
@@ -413,37 +421,35 @@ def main():
         else:
             train_loss_ortho = float("nan")
         print(
-            f"{epoch:>5d} :: {train_loss_total:>16e} :: {train_loss_data:>16e} :: {train_loss_ortho:>16e} :: " \
+            f"{epoch+1:>5d} :: {train_loss_total:>16e} :: {train_loss_data:>16e} :: {train_loss_ortho:>16e} :: " \
             f"{val_loss_data:>16e} :: {test_loss_data:>16e}  :: {early_stop.best_val_loss:>16e}"
         )
         if early_stop.best_model:
             torch.save(model.state_dict(), model_save_dir / "state_dict.pth")
             run.log_model(model_save_dir.as_posix(), name=model_name)
 
-            run.summary["RHYME-xt/best_train"] = train_loss_total
-            run.summary["RHYME-xt/best_val"] = val_loss_data
-            run.summary["RHYME-xt/best_test"] = test_loss_data
-            run.summary["RHYME-xt/best_epoch"] = epoch + 1
+            run.summary["RHYME-XT/best_train"] = train_loss_total
+            run.summary["RHYME-XT/best_val"] = val_loss_data
+            run.summary["RHYME-XT/best_test"] = test_loss_data
+            run.summary["RHYME-XT/best_epoch"] = epoch + 1
 
             ### Visualize trajectory in WB ###
             y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],trajectory_index=0,delta=test_data.delta) 
             y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),x_out_test.view(-1,1).to(device),deltas_feed.to(device),x_in.view(-1,1).to(device))
-            test_loss_trajectory = torch.abs(y.to(device) - y_pred).sum(dim=1)  # Or .mean(dim=1) for mean L1
             time_dim, space_dim = y.shape
-
             time_indices=[0, int(time_dim*0.25), int(time_dim*0.5),  int(time_dim*0.75), int(time_dim*0.95)]    # depends on n_samples
             space_indices=[0, int(space_dim*0.25), int(space_dim*0.5), int(space_dim*0.75),int(space_dim*0.95)] # depends on n_neurons
             fig = plot_space_time_trajectory(y,y_pred,time_indices=time_indices,space_indices=space_indices)
-            wandb.log({"RHYME-xt/Test trajectory": wandb.Image(fig),"RHYME-xt/Best_epoch": epoch+1})
+            wandb.log({"RHYME-XT/Test trajectory": wandb.Image(fig),"RHYME-XT/Best_epoch": epoch+1})
 
         wandb.log({
-            'RHYME-xt/time': time.time() - start,
-            'RHYME-xt/epoch': epoch + 1,
-            'RHYME-xt/lr': sched.get_last_lr()[0],
-            'RHYME-xt/train_loss_total': train_loss_total,
-            'RHYME-xt/train_loss_data': train_loss_data,
-            'RHYME-xt/val_loss': val_loss_data,
-            'RHYME-xt/test_loss': test_loss_data,
+            'RHYME-XT/time': time.time() - start,
+            'RHYME-XT/epoch': epoch + 1,
+            'RHYME-XT/lr': sched.get_last_lr()[0],
+            'RHYME-XT/train_loss_total': train_loss_total,
+            'RHYME-XT/train_loss_data': train_loss_data,
+            'RHYME-XT/val_loss': val_loss_data,
+            'RHYME-XT/test_loss': test_loss_data,
         })
 
         if early_stop.early_stop:
