@@ -4,7 +4,7 @@ from semble.sequence_generators import get_sequence_generator
 from semble.initial_state import get_initial_state_generator
 
 from argparse import ArgumentParser, ArgumentTypeError
-from flumen import RawTrajectoryDataset
+from RHYME_XT import RawTrajectoryDataset
 import torch
 import numpy as np
 

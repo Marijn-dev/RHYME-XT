@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
 
-class RHYME_XT(nn.Module):
+class RHYME_XT_Model(nn.Module):
 
     def __init__(self,
                  state_dim,
@@ -24,7 +24,7 @@ class RHYME_XT(nn.Module):
                  trunk_modes_extra,
                  trunk_model,
                  use_batch_norm):
-        super(RHYME_XT, self).__init__()
+        super(RHYME_XT_Model, self).__init__()
 
         self.state_dim = state_dim
         self.control_dim = control_dim
@@ -193,6 +193,7 @@ class TrunkNet(nn.Module):
     def __init__(self,
                  in_size,
                  out_size,
+                 fourier_features,
                  hidden_size,
                  use_batch_norm,
                  dropout_prob=0.0,
@@ -200,11 +201,12 @@ class TrunkNet(nn.Module):
         super(TrunkNet, self).__init__()
 
         ### Fourier feature mapping to generate more features ###
-        B = torch.normal(mean=0.0, std=0.5, size=(128, 1))
+        self.fourier_features = fourier_features
+        B = torch.normal(mean=0.0, std=0.5, size=(self.fourier_features, 1))
         self.register_buffer("B", B)  
 
         self.layers = nn.ModuleList()
-        self.layers.append(nn.Linear(in_size, hidden_size[0]))
+        self.layers.append(nn.Linear(int(in_size*self.fourier_features), hidden_size[0]))
         self.layers.append(activation())
         
         if use_batch_norm:
