@@ -8,9 +8,9 @@ dynamics:
     refractory: 5 # Sleeping time [ms]
     reset_value: 0 # Reset value [-]
     conduction_speed: 1 # [mm/ms]
-    kernel_type: 2 # 0: Guassian [scale,sigma], 1: Mex-hat [scale,a_ex, s_ex, a_in, s_in, w_in], 2: Oscillatory [A,b,alpha] 3: Cosinescale [scale,A1,A2,a1,a2]
+    kernel_type: 1 # 0: Guassian [scale,sigma], 1: Mex-hat [scale,a_ex, s_ex, a_in, s_in, w_in], 2: Oscillatory [A,b,alpha] 3: Cosinescale [scale,A1,A2,a1,a2]
     ### Paper --> Guassian: [0.15, 0.0012], Mex-hat: [0.25, 1.0, 0.00065, 0.3, 0.0020, 0.0], Oscillatory: [0.00035, 200, 3000] ###
-    kernel_pars: [0.00035, 200, 3000]
+    kernel_pars: [0.25, 1.0, 0.00065, 0.3, 0.0020, 0.0]
     delta: &delta 1
 
 sequence_generator:
@@ -21,12 +21,12 @@ sequence_generator:
     period: 10 # dimensionless
     dim: *N
     amplitude: 2 # when step: True
-    std: 100 # when step: True
+    std: 10
 
 initial_state_generator:
   name: LifInitialState
   args:
-    bumps: 2
-    N: *N # number of bumps
+    bumps: 2 # number of bumps
+    N: *N
 
 control_delta: *delta # [ms]
