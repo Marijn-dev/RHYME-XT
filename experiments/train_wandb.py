@@ -35,9 +35,9 @@ hyperparams = {
     'lr': 0.00011614090101177696,
     'max_seq_len': 20,                      # Maximum sequence length used for training, -1 for full sequences
     'n_samples': 4,                         # Number of samples to use for training when max_seq_len is not -1
-    'n_epochs': 10,                          # Number of epochs to train complete model for
-    'n_epochs_trunk': 1000,                  # Number of epochs to train trunk model for (only used if no pretrained trunk is given)
-    'es_patience': 30,
+    'n_epochs': 100,                          # Number of epochs to train complete model for
+    'n_epochs_trunk': 100000,                  # Number of epochs to train trunk model for (only used if no pretrained trunk is given)
+    'es_patience': 10,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,

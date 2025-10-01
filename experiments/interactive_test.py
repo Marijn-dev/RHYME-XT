@@ -52,23 +52,8 @@ def main():
     with open(model_path / "metadata.yaml", 'r') as f:
         metadata: dict = yaml.load(f, Loader=yaml.FullLoader)
 
-    # pprint(metadata)
-    # config = dict(model_run.config)
-    # print(config.get("fourier_features"))
-    # print(model_run.config["fourier_features"])
-    # args = metadata["args"].copy()
-    # trunk_args = metadata["trunk_args"].copy()
-    # print(args)
-    # args.pop("regular", None)
-    # args.pop("trunk_modes", None)/
-    # args.pop("use_conv_encoder", None)
-    # args["trunk_modes_svd"] = 100
-    # args["trunk_modes_extra"] = 0
     trunk_model = TrunkNet(**metadata["trunk_args"])
-    # args["trunk_model"] = trunk_model
-    # model = RHYME_XT_Model(**args,trunk=trunk_model)
     model = RHYME_XT_Model(**metadata["args"],trunk_model=trunk_model)
-
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -121,7 +106,7 @@ def main():
     plot_slider(y, [y_pred], t_feed, labels=['Ground-truth', 'RHYME-XT'])
 
     # Save GIF
-    # save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
+    save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
 
 
 if __name__ == '__main__':
