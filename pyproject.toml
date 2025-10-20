@@ -6,14 +6,22 @@ build-backend = "setuptools.build_meta"
 name = "RHYME-XT"
 dynamic = ["version"]
 authors = [{name = "Marijn Ruiter", email = "marijnruiter09@gmail.com"}]
-description = "A neural operator for modelling exctiable spatio-temporal rhythms"
+description = "A neural operator for modelling excitable spatio-temporal rhythms"
 readme = "README.md"
 license = { file = "LICENSE" }
-dependencies = ["numpy>=1.18", "torch>=1.8.0"]
-requires-python = ">= 3.6"
+dependencies = [
+    "numpy>=1.18",
+    "torch>=1.8.0",
+    "scipy>=1.5",
+    "wandb"
+]
+requires-python = ">=3.8"
 
 [project.urls]
 Repository = "https://github.com/Marijn-dev/RHYME-XT"
 
-[project.optional-dependencies]
-experiments = ["wandb", "semble", "scipy>=1.5"]
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
