@@ -6,11 +6,11 @@
 
 See paper [Marijn Ruiter, _RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms_ (2025)](-) for a description of the architecture.
 
-The `flumen` package provides the PyTorch module implementing the architecture,
+The `RHYME-XT` package provides the PyTorch module implementing the architecture,
 and some auxiliary functions which can be used for training.
 
 This repository also contains scripts to train a model using synthetic data.
-To generate the data, the [`semble`](https://github.com/Marijn-dev/semble) package is required.
+To generate the data, the [`semble`](https://github.com/Marijn-dev/RHYME-XT/tree/master/semble) package is required.
 First create a data file as follows:
 
 ```shell
