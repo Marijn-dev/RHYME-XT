@@ -150,6 +150,57 @@ class RHYME_XT_Model(nn.Module):
             output = torch.einsum("ni,bi->bn",trunk_output[:, :self.basis_function_modes],output_flow)
             return output, trunk_output 
 
+class DeepONet_Model(nn.Module):
+    def __init__(self,
+                 state_dim,
+                 control_dim,
+                 output_dim, 
+                 modes,
+                 branch_size,
+                 branch_depth,
+                 trunk_size,
+                 trunk_depth,
+                 location_scaling,
+                 use_batch_norm):
+        
+        super(DeepONet_Model, self).__init__()
+
+        self.location_scaling = location_scaling
+
+        self.branch = FFNet(in_size=state_dim+control_dim,
+            out_size=modes,
+            hidden_size=branch_depth *
+            (branch_size, ), 
+            use_batch_norm=use_batch_norm)
+
+        self.trunk = FFNet(in_size=2,
+            out_size=modes,
+            hidden_size=trunk_depth *
+            (trunk_size, ), 
+            use_batch_norm=use_batch_norm)
+
+    def forward(self, x0, u, t, locations):
+        # concat x0 and f for branch inputs
+        x0_u = torch.concat((x0,u),dim=1)
+        branch_out = self.branch(x0_u)
+
+        B, T, _ = t.shape
+        L = locations.shape[0]
+        # Expand time to (B, T, L, 1)
+        time_exp = t.unsqueeze(2).expand(B, T, L, 1)
+        # Expand x to (B, T, L, 1)
+        locations_exp = locations.view(1, 1, L, 1).expand(B, T, L, 1)
+        # Concatenate along last dim → (B, T, L, 2)
+        coords = torch.cat([time_exp, locations_exp], dim=-1)
+        # Flatten T and L → (B, T*L, 2)
+        coords = coords.view(B, T * L, 2)
+        trunk_out = self.trunk(coords)
+
+        # Inner product
+        out = torch.einsum("bi,bni->bn",branch_out, trunk_out)
+        out = out.view(B,T,L)
+        return out
+
 ### MLP ###
 class FFNet(nn.Module):
 

@@ -24,7 +24,6 @@ class RawTrajectoryDataset(Dataset):
         self.delta = delta
         self.mask = output_mask
         self.input_mask = input_mask
-       
 
         self.init_state = torch.empty(
             (n_traj, self.state_dim)).type(torch.get_default_dtype())
@@ -87,6 +86,57 @@ class RawTrajectoryDataset(Dataset):
         return (self.init_state[index], self.init_state_noise[index],
                 self.time[index], self.state[index], self.state_noise[index],
                 self.control_seq[index])
+
+class TrajectoryDataset_DeepONet(Dataset):
+    def __init__(self,
+                 raw_data: RawTrajectoryDataset,
+                ): 
+        
+        init_state = []
+        input_data = []
+        state = []
+        time_data = []
+
+        period = 10 # period of u (hardcoded)
+
+        for (_, _, time, _, _, u) in raw_data:
+            nr_periods = (u.shape[0]//period)
+            segment_length = (time.shape[0]//nr_periods)
+            break
+
+        for (x0, _, time, y, _, u) in raw_data:
+            start_idx = 1
+            for i in range(0,nr_periods):
+                end_idx = start_idx + segment_length
+                x0_segment = y[start_idx-1]
+                u_segment = u[i*period]
+                y_segment = y[start_idx:end_idx]
+                time_segment = time[start_idx:end_idx]
+
+                start_idx = end_idx
+                
+                init_state.append(x0_segment)
+                input_data.append(u_segment)
+                state.append(y_segment)
+                time_data.append(time_segment)
+
+
+        self.init_state = torch.stack(init_state).type(
+            torch.get_default_dtype())
+        self.state = torch.stack(state).type(torch.get_default_dtype())
+        self.input_data = torch.stack(input_data).type(
+            torch.get_default_dtype())
+        self.time_data = torch.stack(time_data).type(
+            torch.get_default_dtype())
+        
+        self.len = len(self.init_state)
+        
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, index):
+        return (self.init_state[index], self.state[index],
+                self.input_data[index], self.time_data[index])
 
 
 class TrajectoryDataset(Dataset):

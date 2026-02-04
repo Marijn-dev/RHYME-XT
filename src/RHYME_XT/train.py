@@ -55,6 +55,25 @@ def train_step(example,locations_out,locations_in, loss_fn, model, optimizer, de
 
     return total_loss.item()
 
+def validate_DeepONet(data, locations, loss_fn, model, device):
+    vl = 0.
+    with torch.no_grad():
+        for example in data:
+            x0, y, u, t = example
+            y_pred = model(x0.to(device),u.to(device), t.to(device), locations.to(device))
+            loss = loss_fn(y.to(device), y_pred)
+            vl += loss.item()
+    return vl / len(data)
+
+def train_step_DeepONet(example, locations, loss_fn, model, optimizer, device):
+    x0, y, u, t = example
+    optimizer.zero_grad()
+    y_pred = model(x0.to(device),u.to(device),t.to(device),locations.to(device))
+    loss = loss_fn(y.to(device), y_pred)
+    loss.backward()
+    optimizer.step()
+    return loss.item()
+        
 
 class EarlyStopping:
 
