@@ -19,19 +19,24 @@ def main():
     sampler = make_trajectory_sampler(settings)
     postprocess = get_postprocess(settings["dynamics"]["name"])
     
-    train_data, val_data, test_data, PHI = generate(args,
+    train_data, val_data, test_data, U, S = generate(args,
                                                sampler,
                                                postprocess=postprocess) 
     
-    locations = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) if isinstance(sampler._dyn.locations, np.ndarray) else None
+    locations_offline = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) if isinstance(sampler._dyn.locations, np.ndarray) else None
+    idx = np.linspace(0, locations_offline.shape[0] - 1, 100, dtype=int)
+    locations_online = locations_offline[idx]
+
     data = {
         "train": train_data,
         "val": val_data,
         "test": test_data,
         "settings": settings,
         "args": vars(args),
-        "PHI": PHI,
-        "Locations":  locations,
+        "U": U,
+        "S": S,
+        "Locations_offline":  locations_offline,
+        "Locations_online":  locations_online,
     }
 
     output_dir = Path("./data/")

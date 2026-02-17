@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib as mpl
 
 from RHYME_XT import RHYME_XT_Model, TrunkNet
-from RHYME_XT.utils import pack_model_inputs, plot_2D_trajectories, plot_heatmap, plot_slider, save_GIF
+from RHYME_XT.utils import pack_model_inputs, plot_2D_trajectories, plot_heatmap, plot_slider, save_GIF, plot_2D_fixedspace
 from generate_data import make_trajectory_sampler
 
 from argparse import ArgumentParser
@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 from pprint import pprint
 from time import time
-
+from matplotlib.ticker import ScalarFormatter
 
 def parse_args():
     ap = ArgumentParser()
@@ -61,16 +61,25 @@ def main():
     sampler.reset_rngs()
     delta = sampler._delta
 
+    
     time_horizon = metadata["data_args"]["time_horizon"]
-
+    time_horizon = 500.0
     time_integrate = time()
     x0, t, y, u,y_full = sampler.get_example(time_horizon=time_horizon,
                                     n_samples=int(1 +
-                                                    1000))
-    time_integrate = time() - time_integrate
+                                                    500))
+    
+    idx = np.linspace(0, y.shape[1] - 1, 100, dtype=int)
+    x0 = x0[idx]
+    y = y[:,idx]
+    u = u[:,idx]
+    
     locations_output = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) * metadata["location_scaling"]
-    locations_input = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) * metadata["location_scaling"]
+    # locations_input = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) * metadata["location_scaling"]
+    locations_output = locations_output[idx]
+    locations_input = locations_output
 
+    time_integrate = time() - time_integrate
     time_predict = time()
 
     x0_feed, t_feed, u_feed, deltas_feed = pack_model_inputs(
@@ -84,15 +93,15 @@ def main():
     
     print(f"Timings: {time_integrate}, {time_predict}")
 
-    y = y[:, tuple(bool(v) for v in sampler._dyn.mask)]
+    # y = y[:, tuple(bool(v) for v in sampler._dyn.mask)]
     L1_error = np.abs(y - y_pred)
     L2_error = np.square(y - y_pred)
     print("MAE error:",np.mean(L1_error))
     print("MSE error:",np.mean(L2_error))
-
+    # t_feed = torch.flip(t_feed,dims=[0])
     # 2D Plot of slices in the trajectory
     plot_2D_trajectories(
-    y, [y_pred], t_feed,
+    y, [y_pred], torch.flip(t_feed,dims=[0]),
     labels=['Ground-truth', 'RHYME-XT'],
     time_indices=[int(y.shape[0]*0.25), int(y.shape[0]*0.5), int(y.shape[0]*0.95)],
     space_indices=[int(y.shape[1]*0.25), int(y.shape[1]*0.5), int(y.shape[1]*0.95)])
@@ -106,7 +115,9 @@ def main():
     plot_slider(y, [y_pred], t_feed, labels=['Ground-truth', 'RHYME-XT'])
 
     # Save GIF
-    save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
+    # save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
+
+
 
 
 if __name__ == '__main__':

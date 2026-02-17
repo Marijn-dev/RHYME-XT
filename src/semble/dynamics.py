@@ -3,7 +3,7 @@ from . import initial_state
 from brian2 import *
 from .visualization import visualise_connectivity, heatmap_1D, plot_animate_1d, heatmap_1D_adj, heatmap_1D_adj_2,plot_slider_1d,plot_fixed_views,plot_spatio_temporal_slices
 import time
-
+from .visualization import *
 class Dynamics:
 
     def __init__(self, state_dim, control_dim, mask=None,input_mask=None):
@@ -14,7 +14,7 @@ class Dynamics:
         self.mask = mask if mask is not None else np.ones(self.n)
         self.p = sum(self.mask)
         self.input_mask = None
-        self.locations = None
+        # self.locations = None
 
         self._method = "RK45"
 
@@ -452,72 +452,144 @@ class Heat(Dynamics):
 
         return dt
     
+# class Amari(Dynamics):
+#     def __init__(self,x_lim,dx,theta,kernel_type,kernel_pars):
+#         '''Amari, S. I. (1977). Dynamics of pattern formation in lateral-inhibition type neural fields. Biological Cybernetics, 27(2), 77-87,'
+#         'implementation based on: https://github.com/w-wojtak/neural-fields-python?tab=readme-ov-file#1'''
+
+#         super().__init__((int(np.round(x_lim/dx))*2+1,), int(np.round(x_lim/dx))*2+1)
+#         self._method = "SM" # Spectral method, uses FFT-based convolutions
+
+#         self.x_lim = x_lim
+#         self.dx = dx
+#         self.theta = theta
+#         self.x = np.arange(-x_lim,x_lim+dx,dx)
+#         self.locations = self.x
+#         import matplotlib.pyplot as plt
+
+#         if kernel_type == 0:
+#             self.w_hat = np.fft.fft(self.kernel_gauss(self.x, *kernel_pars))
+#             plt.plot(self.x,self.kernel_gauss(self.x, *kernel_pars))
+#             print("Kernel integral:", np.sum(self.kernel_gauss(self.x, *kernel_pars) * dx))
+#         elif kernel_type == 1:
+#             self.w_hat = np.fft.fft(self.kernel_mex(self.x, *kernel_pars))
+#             plt.plot(self.x,self.kernel_mex(self.x, *kernel_pars))
+#             print("Kernel integral:", np.sum(self.kernel_mex(self.x, *kernel_pars) * dx))
+#         elif kernel_type == 2:
+#             self.w_hat = np.fft.fft(self.kernel_osc(self.x, *kernel_pars))
+#             plt.plot(self.x,self.kernel_osc(self.x, *kernel_pars))
+#             print("Kernel integral:", np.sum(self.kernel_osc(self.x, *kernel_pars) * dx))
+#         elif kernel_type == 3:
+#             self.w_hat = np.fft.fft(self.kernel_cos(self.x, *kernel_pars))
+#             plt.plot(self.x,self.kernel_cos(self.x, *kernel_pars))
+#             print("Kernel integral:", np.sum(self.kernel_cos(self.x, *kernel_pars) * dx))
+
+#         plt.show()
+
+
+#     def kernel_mex(self,x, a_ex, s_ex, a_in, s_in, w_in):
+#         return a_ex * np.exp(-0.5 * x ** 2 / s_ex ** 2) - a_in * np.exp(-0.5 * x ** 2 / s_in ** 2) - w_in
+
+#     def kernel_gauss(self,x, a_ex, s_ex, w_in):
+#         return a_ex * np.exp(-0.5 * x ** 2 / s_ex ** 2) - w_in
+
+#     def kernel_osc(self,x, a, b, alpha):
+#         return a * (np.exp(-b*abs(x)) * ((b * np.sin(abs(alpha*x)))+np.cos(alpha*x)))
+
+#     def kernel_cos(self, x,A_1,A_2,a_1,a_2):
+#         return (A_1*np.exp(-a_1* x ** 2 ) - A_2*np.exp(-a_2 * x ** 2)) * np.cos(x/2)
+
+#     def sigmoid(self,x):
+#             return 1 / (1 + np.exp(-100* (x - self.theta)))
+
+#     def simulate(self,u0,inputs,n_samples,time_horizon,init_time):
+
+#         dt = (time_horizon-init_time)/inputs.shape[0]
+#         t = np.arange(init_time,time_horizon,dt)
+#         history_u = np.zeros([len(t), len(self.x)])
+#         u_field = u0
+#         for i in range(0, len(t)):
+#             # f_hat = np.fft.fft(np.heaviside(u_field - self.theta, 1))
+#             f_hat = np.fft.fft(self.sigmoid(u_field))
+#             conv = self.dx * np.fft.ifftshift(np.real(np.fft.ifft(f_hat * self.w_hat)))
+#             # print(f_hat)  
+#             # print('i:', i   )
+#             # print(conv)
+#             u_field = u_field + (dt/0.5) * (-u_field + conv + inputs[i, :])
+#             history_u[i, :] = u_field
+        
+#         return history_u, t
+
 class Amari(Dynamics):
-    def __init__(self,x_lim,dx,theta,kernel_type,kernel_pars):
-        '''Amari, S. I. (1977). Dynamics of pattern formation in lateral-inhibition type neural fields. Biological Cybernetics, 27(2), 77-87,'
-        'implementation based on: https://github.com/w-wojtak/neural-fields-python?tab=readme-ov-file#1'''
+    def __init__(self, n, x_lim, dx, theta, kernel_type, kernel_pars):
+        self._dx = dx
+        self._dt = 0.025
+        self.locations = np.arange(-x_lim, x_lim+self._dx, self._dx) 
+        state_dim = control_dim = n
+        super().__init__(state_dim, control_dim)
 
-        super().__init__((int(np.round(x_lim/dx))*2+1,), int(np.round(x_lim/dx))*2+1)
-        self._method = "SM" # Spectral method, uses FFT-based convolutions
-
-        self.x_lim = x_lim
-        self.dx = dx
+        self._method = "SM"
         self.theta = theta
-        self.x = np.arange(-x_lim,x_lim+dx,dx)
-        self.locations = self.x
-        import matplotlib.pyplot as plt
-        if kernel_type == 0:
-            self.w_hat = np.fft.fft(self.kernel_gauss(self.x, *kernel_pars))
-            plt.plot(self.x,self.kernel_gauss(self.x, *kernel_pars))
-            print("Kernel integral:", np.sum(self.kernel_gauss(self.x, *kernel_pars) * dx))
-        elif kernel_type == 1:
-            self.w_hat = np.fft.fft(self.kernel_mex(self.x, *kernel_pars))
-            plt.plot(self.x,self.kernel_mex(self.x, *kernel_pars))
-            print("Kernel integral:", np.sum(self.kernel_mex(self.x, *kernel_pars) * dx))
-        elif kernel_type == 2:
-            self.w_hat = np.fft.fft(self.kernel_osc(self.x, *kernel_pars))
-            plt.plot(self.x,self.kernel_osc(self.x, *kernel_pars))
-            print("Kernel integral:", np.sum(self.kernel_osc(self.x, *kernel_pars) * dx))
-        elif kernel_type == 3:
-            self.w_hat = np.fft.fft(self.kernel_cos(self.x, *kernel_pars))
-            plt.plot(self.x,self.kernel_cos(self.x, *kernel_pars))
-            print("Kernel integral:", np.sum(self.kernel_cos(self.x, *kernel_pars) * dx))
+        kernels = {
+                0: self.gaussian, 
+                1: self.mexhat, 
+                2: self.oscillatory
+            }
+        
+        kernel = kernels[kernel_type]
+        self.w_hat = np.fft.fft(kernel(self.locations, kernel_pars)) 
 
-        plt.show()
-
-
-    def kernel_mex(self,x, a_ex, s_ex, a_in, s_in, w_in):
-        return a_ex * np.exp(-0.5 * x ** 2 / s_ex ** 2) - a_in * np.exp(-0.5 * x ** 2 / s_in ** 2) - w_in
-
-    def kernel_gauss(self,x, a_ex, s_ex, w_in):
+    def gaussian(self, x, kernel_pars):
+        a_ex, s_ex, w_in = kernel_pars
         return a_ex * np.exp(-0.5 * x ** 2 / s_ex ** 2) - w_in
 
-    def kernel_osc(self,x, a, b, alpha):
+    def mexhat(self, x, kernel_pars):
+        a_ex, s_ex, a_in, s_in, w_in = kernel_pars
+        return a_ex * np.exp(-0.5 * x ** 2 / s_ex ** 2) - a_in * np.exp(-0.5 * x ** 2 / s_in ** 2) - w_in
+
+    def oscillatory(self, x, kernel_pars):
+        a, b, alpha = kernel_pars
         return a * (np.exp(-b*abs(x)) * ((b * np.sin(abs(alpha*x)))+np.cos(alpha*x)))
+    
+    def sigmoid(self, x):
+        beta = 1000
+        return 1 / (1 + np.exp(-beta * (x - self.theta)))
+    
+    def simulate(self, v0, u, delta, time_horizon,init_time):
+        t = np.arange(init_time, time_horizon+self._dt, self._dt)
+        v = np.zeros([len(t), len(self.locations)])
+        v_field = v0
+        u_tot = np.zeros([len(t), len(self.locations)])
+        v[0,:] = v0
 
-    def kernel_cos(self, x,A_1,A_2,a_1,a_2):
-        return (A_1*np.exp(-a_1* x ** 2 ) - A_2*np.exp(-a_2 * x ** 2)) * np.cos(x/2)
+        # tau_h = 5
+        # h_0 = 0
+        # h_u = h_0 * np.ones(len(self.locations))
 
-    def sigmoid(self,x):
-            return 1 / (1 + np.exp(-100* (x - self.theta)))
+        for i in range(1, len(t)):
+            # f = np.heaviside(v_field - self.theta, 1)
+            f = self.sigmoid(v_field)
+            f_hat = np.fft.fft(f)
+            conv = self._dx * np.fft.ifftshift(np.real(np.fft.ifft(f_hat * self.w_hat)))
 
-    def simulate(self,u0,inputs,n_samples,time_horizon,init_time):
+            # h_u = h_u + self._dt / tau_h * f
+            n_control = int(np.floor((t[i] - init_time) / delta))
+            u_val = u[n_control]  # get u(t)
+            u_tot[i:,] = u_val
 
-        dt = (time_horizon-init_time)/inputs.shape[0]
-        t = np.arange(init_time,time_horizon,dt)
-        history_u = np.zeros([len(t), len(self.x)])
-        u_field = u0
-        for i in range(0, len(t)):
-            # f_hat = np.fft.fft(np.heaviside(u_field - self.theta, 1))
-            f_hat = np.fft.fft(self.sigmoid(u_field))
-            conv = self.dx * np.fft.ifftshift(np.real(np.fft.ifft(f_hat * self.w_hat)))
-            # print(f_hat)  
-            # print('i:', i   )
-            # print(conv)
-            u_field = u_field + (dt/0.5) * (-u_field + conv + inputs[i, :])
-            history_u[i, :] = u_field
+            v_field = v_field + self._dt * (-v_field + conv + u_val)
+            v[i, :] = v_field
+
         
-        return history_u, t
+        field_pars = [10, time_horizon, self._dx, self._dt, self.theta]
+        # plot_space_time_flat(v, field_pars)
+        
+        # plot_animate_1d(v, field_pars, u_tot, True)
+        # plot_slider_1d(v, field_pars, u_tot, True)
+
+        return v, t
+
+
 
 class AmariCoupled(Dynamics):
     def __init__(self,x_lim,dx,theta,beta,tau_u,tau_v,kernel_types,kernel_pars,diffusion,diffusion_coeff,advection,advection_coeff):
@@ -876,6 +948,7 @@ class LIFBrian2(Dynamics):
         # heatmap_1D(self.Statemon.v,self.Statemon.I)
         # plot_fixed_views(self.Statemon.v)
         # plot_animate_1d(self.Statemon.v,self.theta,self.Statemon.I)
+        
         y, t = asarray(self.Statemon.v), asarray(self.Statemon.t) * 1000 # convert from s to ms (asarray returns it in seconds)
         return y, t
 

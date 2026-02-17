@@ -46,8 +46,17 @@ class TrajectorySampler:
             control_seq = self._seq_gen.sample(time_range=(self._init_time,
                                                         time_horizon),
                                             delta=self._delta)
-            y, t = self._dyn.simulate(y0,control_seq,n_samples,time_horizon,self._init_time)
-            
+            y, t = self._dyn.simulate(y0,control_seq,self._delta, time_horizon,self._init_time)
+
+            t_samples = self._init_time + (time_horizon - self._init_time) * lhs(
+                n_samples, self._rng)
+            t_samples = np.sort(np.append(t_samples, [self._init_time]))
+            closest_indices = np.abs(t[:, None] - t_samples).argmin(axis=0) # use this cause of fixed timestep
+            y_full = y
+            t = t[closest_indices]
+            y = y[closest_indices,:]
+            t = t.reshape(-1,1)
+        
         elif self._ode_method == "Brian2":
             control_seq = self._seq_gen.sample(time_range=(self._init_time,
                                                         time_horizon),
@@ -89,6 +98,7 @@ class TrajectorySampler:
 
             y = traj.y.T
             t = traj.t.reshape(-1, 1)
+            
         return y0, t, y, control_seq, y_full
 
 

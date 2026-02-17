@@ -130,19 +130,21 @@ class HeatInitialState(InitialStateGenerator):
         return x0
 
 class AmariInitialState(InitialStateGenerator):
-    def __init__(self,x_lim,dx,rng: np.random.Generator = None):
+    def __init__(self,x_lim,dx,amplitude, std, rng: np.random.Generator = None):
         '''returns empty array'''
         super().__init__(rng)
-        self.n = int(np.round(x_lim/dx)) * 2+1
-        self.x = np.arange(-x_lim,x_lim+dx,dx)
+        self.locations = np.arange(-x_lim,x_lim+dx,dx)
+        self._amplitude = amplitude
+        self._std = std
 
     def _sample_impl(self):
-        # x0 = np.zeros(self.n)
-        x0 = 0.3 * np.exp(-(self.x**2) / (0.05**2))  # Small bump in center
-        x0 = 0.05 * np.random.randn(self.n)  # Small random fluctuations
-        x0 = 1.5 * np.exp(-(self.x**2) / (1**2))  # above threshold
-        x0 += 1.5*np.exp(-(self.x - self.x[-1])**2 / 0.01)  # bump near edge
-        x0 += 1.5*np.exp(-(self.x - self.x[0])**2 / 0.01)  # bump near edge
+        x0 = np.zeros_like(self.locations)
+        for i in range(0,2):
+            amplitude = self._rng.uniform(low = self._amplitude[0], high=self._amplitude[1], size=1)
+            std = self._rng.uniform(low = self._std[0], high=self._std[1], size=1)
+            mean = self._rng.choice(self.locations, size=1)
+            print(amplitude)
+            x0 += amplitude * np.exp(-0.5 * ((self.locations - mean) / std) ** 2)
 
         return x0
         

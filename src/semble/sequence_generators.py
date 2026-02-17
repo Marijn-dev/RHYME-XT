@@ -168,6 +168,31 @@ class SinusoidalSequence(SequenceGenerator):
 
         return (amplitude * np.sin(np.pi * frequency / delta * time)).reshape(
             (-1, 1))
+    
+class SpatialGaussian(SequenceGenerator):
+    def __init__(self, x_lim, dx, period, amplitude, std, rng=None):
+        self.locations = np.arange(-x_lim, x_lim+dx, dx) 
+        super().__init__(len(self.locations), rng)
+
+        self._period = period
+        self._amplitude = amplitude
+        self._std = std
+
+    def _sample_impl(self, time_range, delta):
+        n_control_vals = int(1 +
+                             np.floor((time_range[1] - time_range[0]) / delta))
+
+        n_amplitude_vals = int(np.ceil(n_control_vals / self._period))
+
+        amplitude = self._rng.uniform(low = self._amplitude[0], high=self._amplitude[1], size=(n_amplitude_vals,1))
+        std = self._rng.uniform(low = self._std[0], high=self._std[1], size=(n_amplitude_vals,1))
+        mean = self._rng.choice(self.locations, size=(n_amplitude_vals,1))
+
+        amp_seq = amplitude * np.exp(-0.5 * ((self.locations - mean) / std) ** 2)
+
+        control_seq = np.repeat(amp_seq, self._period, axis=0)[:n_control_vals]
+        return control_seq
+
 
 class Gaussian1D(SequenceGenerator):
     '''input used for the amari model, contains several guassians'''
@@ -210,7 +235,8 @@ class Gaussian1D(SequenceGenerator):
             # control_seq
         # np.zeros([n_control_vals, len(self.x)])
         # return control_seq
-        return np.ones([n_control_vals, len(self.x)]) * 0
+        return control_seq
+
 
 class LIF_input(SequenceGenerator):
 
@@ -261,6 +287,7 @@ _seqgen_names = {
     "LogNormalSqWave": LogNormalSqWave,
     "RandomWalkSequence": RandomWalkSequence,
     "SinusoidalSequence": SinusoidalSequence,
+    "SpatialGaussian": SpatialGaussian,
     "Gaussian1D": Gaussian1D,
     "LIF_input": LIF_input,
 }

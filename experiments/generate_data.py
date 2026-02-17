@@ -89,16 +89,19 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         x0, t, y, u, y_full = trajectory_sampler.get_example(args.time_horizon,
                                                      args.n_samples)
         
+        
+        idx = np.linspace(0, y.shape[1] - 1, 100, dtype=int)
         return {
-            "init_state": x0,
+            "init_state": x0[idx],
             "time": t,
-            "state": y,
-            "control": u,
+            "state": y[:,idx],
+            "control": u[:,idx],
             "full_state": y_full
         }
+    
     train_data = []
     for i in range(n_train):
-        if i % 100 == 0:
+        if i % 1 == 0:
             print(f"Generating training dataset example {i+1}/{n_train}")
         example = get_example()
         train_data.append(example)
@@ -114,9 +117,10 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
     for d in train_data
     ], dim=0)
     
-    selected_indices = torch.linspace(0, states_combined.shape[1]-1, steps=int(states_combined.shape[1]*args.num_locations_svd)).long()
-    PHI, _, _ = torch.linalg.svd(states_combined[:, selected_indices].T + args.noise_std_svd * torch.randn_like(states_combined[:, selected_indices].T),full_matrices=False)
-    
+    # selected_indices = torch.linspace(0, states_combined.shape[1]-1, steps=int(states_combined.shape[1]*args.num_locations_svd)).long()
+    # PHI, S, Vt = torch.linalg.svd(states_combined[:, selected_indices].T + args.noise_std_svd * torch.randn_like(states_combined[:, selected_indices].T),full_matrices=False)
+    U, S, Vt = torch.linalg.svd(states_combined.T, full_matrices = False)
+
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
                                       delta=trajectory_sampler._delta,
@@ -142,7 +146,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
 
-    return train_data, val_data, test_data, PHI
+    return train_data, val_data, test_data, U, S
 
 
 def make_trajectory_sampler(settings):
