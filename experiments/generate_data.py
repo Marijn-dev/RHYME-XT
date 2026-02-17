@@ -96,7 +96,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
             "time": t,
             "state": y[:,idx],
             "control": u[:,idx],
-            "full_state": y_full
+            "full_state": y_full[:,idx]
         }
     
     train_data = []

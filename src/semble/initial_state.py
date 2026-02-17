@@ -143,7 +143,6 @@ class AmariInitialState(InitialStateGenerator):
             amplitude = self._rng.uniform(low = self._amplitude[0], high=self._amplitude[1], size=1)
             std = self._rng.uniform(low = self._std[0], high=self._std[1], size=1)
             mean = self._rng.choice(self.locations, size=1)
-            print(amplitude)
             x0 += amplitude * np.exp(-0.5 * ((self.locations - mean) / std) ** 2)
 
         return x0

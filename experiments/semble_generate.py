@@ -35,7 +35,7 @@ def main():
         "args": vars(args),
         "U": U,
         "S": S,
-        "Locations_offline":  locations_offline,
+        "Locations_offline":  locations_online,
         "Locations_online":  locations_online,
     }
 
