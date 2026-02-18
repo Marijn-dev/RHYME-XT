@@ -258,7 +258,7 @@ def main():
     else:
         print("Using pretrained trunk model...")
         trunk_path = Path(sys_args.pretrained_trunk)
-        trunk_model = TrunkNet(in_size=256,out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
+        trunk_model = TrunkNet(in_size=2,fourier_features=wandb.config['fourier_features'],out_size=wandb.config['trunk_modes_svd'],hidden_size=wandb.config['trunk_size_svd'],use_batch_norm=False)
         trunk_model.load_state_dict(torch.load(trunk_path))
         trunk_model.to(device)
         trunk_model.train()  
