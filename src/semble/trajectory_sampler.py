@@ -51,6 +51,12 @@ class TrajectorySampler:
             t_samples = self._init_time + (time_horizon - self._init_time) * lhs(
                 n_samples, self._rng)
             t_samples = np.sort(np.append(t_samples, [self._init_time]))
+            f_period = 5
+            nr_periods = int(time_horizon // f_period)
+            segment_length = int(n_samples // nr_periods)
+            for i in range(0,nr_periods):
+                t_samples[int(segment_length*i)] = f_period * i
+            
             closest_indices = np.abs(t[:, None] - t_samples).argmin(axis=0) # use this cause of fixed timestep
             y_full = y
             t = t[closest_indices]

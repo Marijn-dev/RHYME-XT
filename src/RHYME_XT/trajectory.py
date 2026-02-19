@@ -97,11 +97,11 @@ class TrajectoryDataset_DeepONet(Dataset):
         state = []
         time_data = []
 
-        period = 10 # period of u (hardcoded)
+        period = 5 # period of f(x,t) (hardcoded)
 
-        for (_, _, time, _, _, u) in raw_data:
-            nr_periods = (u.shape[0]//period)
-            segment_length = (time.shape[0]//nr_periods)
+        for (_, _, time, y, _, u) in raw_data:
+            nr_periods = int((50//period)) # time_horzon of data (hardcoded)
+            segment_length = int((time.shape[0]//nr_periods))
             break
 
         for (x0, _, time, y, _, u) in raw_data:
@@ -113,12 +113,11 @@ class TrajectoryDataset_DeepONet(Dataset):
                 y_segment = y[start_idx:end_idx]
                 time_segment = time[start_idx:end_idx] - time[start_idx-1].unsqueeze(0)
                 start_idx = end_idx
-                
                 init_state.append(x0_segment)
                 input_data.append(u_segment)
                 state.append(y_segment)
                 time_data.append(time_segment)
-
+                
         self.init_state = torch.stack(init_state).type(
             torch.get_default_dtype())
         self.state = torch.stack(state).type(torch.get_default_dtype())
@@ -126,7 +125,6 @@ class TrajectoryDataset_DeepONet(Dataset):
             torch.get_default_dtype())
         self.time_data = torch.stack(time_data).type(
             torch.get_default_dtype())
-        print(self.time_data.shape)
         self.len = len(self.init_state)
         
     def __len__(self):

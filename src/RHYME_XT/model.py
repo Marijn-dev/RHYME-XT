@@ -160,12 +160,9 @@ class DeepONet_Model(nn.Module):
                  branch_depth,
                  trunk_size,
                  trunk_depth,
-                 location_scaling,
                  use_batch_norm):
         
         super(DeepONet_Model, self).__init__()
-
-        self.location_scaling = location_scaling
 
         self.branch = FFNet(in_size=state_dim+control_dim,
             out_size=modes,

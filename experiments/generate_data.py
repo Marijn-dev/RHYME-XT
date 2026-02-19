@@ -112,14 +112,14 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
 
     test_data = [get_example() for _ in range(n_test)]
 
-    states_combined = torch.cat([
-    torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
-    for d in train_data
-    ], dim=0)
+    # states_combined = torch.cat([
+    # torch.tensor(d["full_state"], dtype=torch.get_default_dtype())
+    # for d in train_data
+    # ], dim=0)
     
     # selected_indices = torch.linspace(0, states_combined.shape[1]-1, steps=int(states_combined.shape[1]*args.num_locations_svd)).long()
     # PHI, S, Vt = torch.linalg.svd(states_combined[:, selected_indices].T + args.noise_std_svd * torch.randn_like(states_combined[:, selected_indices].T),full_matrices=False)
-    U, S, Vt = torch.linalg.svd(states_combined.T, full_matrices = False)
+    # U, S, Vt = torch.linalg.svd(states_combined.T, full_matrices = False)
 
     train_data = RawTrajectoryDataset(train_data,
                                       *trajectory_sampler.dims(),
@@ -146,7 +146,7 @@ def generate(args, trajectory_sampler: TrajectorySampler, postprocess=[]):
         for p in postprocess:
             p(d)
 
-    return train_data, val_data, test_data, U, S
+    return train_data, val_data, test_data
 
 
 def make_trajectory_sampler(settings):

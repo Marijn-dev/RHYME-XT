@@ -21,7 +21,7 @@ hyperparams = {
     'trunk_depth':3,
     'modes':150,
     'batch_size': 64,
-    'location_scaling':1000,                 # Scale the location inputs to the trunk net by this factor (normalization) [m] -> [mm]
+    'location_scaling':1,                 # Scale the location inputs to the trunk net by this factor (normalization) 
     'lr': 0.00011614090101177696,
     'n_epochs': 100,                        # Number of epochs to train complete model for
     'es_patience': 10,
@@ -67,9 +67,10 @@ def main():
         data = pickle.load(f)
 
     train_data = TrajectoryDataset_DeepONet(data["train"])
+
     val_data = TrajectoryDataset_DeepONet(data["val"])
     test_data = TrajectoryDataset_DeepONet(data["test"])
-    locations = data['Locations'] # to [m] 
+    locations = data['Locations_online']*wandb.config['location_scaling'] 
      
     DeepONet_model_args = {
         'state_dim': int(data["train"].state_dim),
@@ -80,7 +81,6 @@ def main():
         'branch_depth': wandb.config["branch_depth"],
         'trunk_size': wandb.config["trunk_size"],
         'trunk_depth': wandb.config["trunk_depth"],
-        'location_scaling': wandb.config['location_scaling'], # [m] -> [mm]
         'use_batch_norm': False,
     }
   
@@ -88,6 +88,7 @@ def main():
     model_metadata = {
         'args': DeepONet_model_args,
         'data_path': data_path.absolute().as_posix(),
+        'location_scaling':wandb.config['location_scaling'],
         'data_settings': data["settings"],
         'data_args': data["args"]
     }
