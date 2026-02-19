@@ -111,7 +111,7 @@ class TrajectoryDataset_DeepONet(Dataset):
                 x0_segment = y[start_idx-1]
                 u_segment = u[i*period]
                 y_segment = y[start_idx:end_idx]
-                time_segment = time[start_idx:end_idx] - time[start_idx-1].unsqueeze(0)
+                time_segment = time[start_idx:end_idx]
                 start_idx = end_idx
                 init_state.append(x0_segment)
                 input_data.append(u_segment)
