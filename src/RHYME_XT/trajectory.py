@@ -118,7 +118,7 @@ class TrajectoryDataset_DeepONet(Dataset):
                 input_data.append(u_segment)
                 state.append(y_segment)
                 time_data.append(time_segment)
-                
+
         self.init_state = torch.stack(init_state).type(
             torch.get_default_dtype())
         self.state = torch.stack(state).type(torch.get_default_dtype())

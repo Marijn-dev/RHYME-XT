@@ -184,7 +184,7 @@ class DeepONet_Model(nn.Module):
             (trunk_size, ), 
             use_batch_norm=use_batch_norm)
 
-        self.output_NN = FFNet(in_size=modes*2,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
+        self.output_NN = FFNet(in_size=modes*2,out_size = 1,hidden_size=[120,120,120],use_batch_norm=use_batch_norm)
 
     def forward(self, x0, u, t, locations):
         # concat x0 and f for branch inputs

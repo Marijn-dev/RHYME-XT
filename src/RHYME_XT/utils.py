@@ -196,6 +196,32 @@ def pack_model_inputs(x0, t, u, delta):
                                                        enforce_sorted=True)
 
     return x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+def prepare_model_inputs_DeepONet(x0,t,u,delta,time_horizon,samples):
+    input_data = []
+    time_data = []
+
+    period = 5 # period of u (hardcoded)
+    nr_periods = int(time_horizon//period)
+    segment_length = int(t.shape[0]//nr_periods)
+    u = torch.from_numpy(u)
+    t = torch.tensor(t.reshape(-1,1))
+    start_idx = 1
+
+    for i in range(0,nr_periods):
+        end_idx = start_idx + segment_length
+        u_segment = u[i*nr_periods]
+        time_segment = t[start_idx:end_idx] - t[start_idx-1].unsqueeze(0)
+        start_idx = end_idx
+        
+        input_data.append(u_segment)
+        time_data.append(time_segment)
+        
+    x0 = torch.tensor(x0.reshape((1,-1))).type(torch.get_default_dtype())
+    u = torch.stack(input_data).type(torch.get_default_dtype())
+    u = u.unsqueeze(1)
+    time = torch.stack(time_data).type(torch.get_default_dtype())
+    time = time.unsqueeze(1)
+    return x0, time, u
 
 def trajectory(data,trajectory_index,delta):
     x0, init_state_noise, t, y, state_noise, control_seq = data[trajectory_index]
@@ -218,6 +244,81 @@ def trajectory(data,trajectory_index,delta):
                                                    batch_first=True,
                                                    enforce_sorted=True)
     return y,x0, t, u_packed, rnn_inputs[:, :lengths[0], -1].unsqueeze(-1)
+def plot_2D_fixedspace(
+    y, y_pred_list, t_feed,
+    labels=None,
+    space_indices=[21, 50, 78]
+    ):
+    '''
+    Args:
+        y: Ground truth array of shape (nt, nx)
+        y_pred_list: List of prediction arrays, each of shape (nt, nx)
+        t_feed: Time array of shape (nt,)
+        labels: List of legend labels [ground_truth, pred1, pred2, ...]
+    '''
+    
+    # === Plot style ===
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 22,
+        'axes.labelsize': 22,
+        'xtick.labelsize': 16,
+        'ytick.labelsize': 16,
+        'legend.fontsize': 20,
+        'font.size': 18,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [20, 4],  # width x height
+    })
+    colors = ["black", "#0072BD", "#D95319", "#77AC30", "#7E2F8E"]
+    linestyles = ['-', '--', ':', '-.', '-']
+
+    y_np = y.T
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+    t_feed = np.array(t_feed)
+    t_feed = np.flip(t_feed)
+    all_data = [y_np] + y_pred_np_list
+    global_min = min(arr.min() for arr in all_data)
+    global_max = max(arr.max() for arr in all_data)
+
+    x = np.linspace(0, 25, y.shape[1])
+
+    # n_cols = min(4, len(space_indices))
+    # n_rows = 3
+
+    fig, axs = plt.subplots(3, 1,dpi=100
+                        ,sharex=True)
+
+    # if n_cols == 1:
+    #     axs = axs.reshape(n_rows, 1)
+
+    x = np.linspace(0, 25, y.shape[1])
+    
+
+    for i, idx in enumerate(space_indices):
+        ax = axs[i]
+        ax.plot(t_feed, y_np[idx, :], label=labels[0], color=colors[0], linestyle=linestyles[0])
+        for j, y_pred_np in enumerate(y_pred_np_list):
+            ax.plot(t_feed, y_pred_np[idx, :],
+                    # label=labels[j + 1] if labels else f"Pred {j+1}",
+                    color=colors[(j + 1) % len(colors)],
+                    linestyle=linestyles[(j + 1) % len(linestyles)])
+        ax.set_ylim(global_min, global_max)
+        # ax.set_title(f"location a = {x[idx]:.0f} [mm]")
+        ax.grid(True)
+        # Remove individual labels
+        # ax.set_xlabel('time t [ms]')
+
+    axs[-1].set_xlabel(r'time t [ms]')
+    axs[-1].set_ylabel(r'u(x=,t)')
+   
+    # fig.text(0.01, 0.70,r'u(x=a,t)', va='center', ha='center',
+    #      rotation='vertical', fontsize=20)
+    # plt.tight_layout()
+    fig.savefig("test.png")
+    plt.show()
 
 def plot_slider_1d(t,y,inputs,locations):
     """
