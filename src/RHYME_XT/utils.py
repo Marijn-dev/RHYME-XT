@@ -465,6 +465,74 @@ def plot_space_time_trajectory(
     fig.tight_layout()
     return fig
 
+def plot_simulation_results(pred, target):
+    """
+    Plots Heatmaps with a unified color scale for Target and Pred.
+    Reports global MSE and Max Error on the error plot.
+    """
+    # 1. Reshape and Transpose: (10, 20, 100) -> (100, 200)
+    pred_flat = pred.reshape(-1, 100).detach().cpu().numpy().T
+    target_flat = target.reshape(-1, 100).detach().cpu().numpy().T
+    
+    # 2. Calculate Global Scale for Heatmaps
+    # This ensures "yellow" in Target means the same value as "yellow" in Pred
+    v_min = min(pred_flat.min(), target_flat.min())
+    v_max = max(pred_flat.max(), target_flat.max())
+
+    # 3. Calculate Error Metrics
+    error = target_flat - pred_flat
+    mse = np.mean(error**2)
+    max_err = np.max(np.abs(error))
+
+    fig = plt.figure(figsize=(18, 12))
+    gs = fig.add_gridspec(3, 3)
+    
+    # --- HEATMAPS ---
+    # Target (Fixed Scale)
+    ax1 = fig.add_subplot(gs[0, 0])
+    im1 = ax1.imshow(target_flat, aspect='auto', cmap='viridis', 
+                    origin='lower', vmin=v_min, vmax=v_max)
+    ax1.set_title("Target (Space vs Time)")
+    plt.colorbar(im1, ax=ax1)
+
+    # Prediction (Fixed Scale)
+    ax2 = fig.add_subplot(gs[0, 1])
+    im2 = ax2.imshow(pred_flat, aspect='auto', cmap='viridis', 
+                    origin='lower', vmin=v_min, vmax=v_max)
+    ax2.set_title("Prediction (Space vs Time)")
+    plt.colorbar(im2, ax=ax2)
+
+    # Error Map (Uses its own scale centered at 0)
+    ax3 = fig.add_subplot(gs[0, 2])
+    # Symmetric colorbar for error (e.g., -0.5 to 0.5)
+    err_lim = np.max(np.abs(error))
+    im3 = ax3.imshow(error, aspect='auto', cmap='RdBu_r', 
+                    origin='lower', vmin=-err_lim, vmax=err_lim)
+    ax3.set_title(f"Error (Target - Pred)\nMSE: {mse:.2e} | Max: {max_err:.2e}")
+    plt.colorbar(im3, ax=ax3)
+
+    # --- SNAPSHOTS (Spatial Profiles) ---
+    snapshot_indices = [0, 100, 199]
+    for i, t_idx in enumerate(snapshot_indices):
+        ax = fig.add_subplot(gs[1, i])
+        ax.plot(target_flat[:, t_idx], 'k-', label='Target', alpha=0.8)
+        ax.plot(pred_flat[:, t_idx], 'r--', label='Pred', alpha=0.8)
+        ax.set_title(f"Space Profile @ t={t_idx}")
+        ax.set_ylim(v_min, v_max) # Keep Y-axis consistent with heatmap scale
+        ax.legend()
+
+    # --- TIME SERIES (Time Profiles) ---
+    space_indices = [10, 50, 90]
+    for i, x_idx in enumerate(space_indices):
+        ax = fig.add_subplot(gs[2, i])
+        ax.plot(target_flat[x_idx, :], 'k-', label='Target')
+        ax.plot(pred_flat[x_idx, :], 'r--', label='Pred')
+        ax.set_title(f"Time Series @ x={x_idx}")
+        ax.set_ylim(v_min, v_max) # Keep Y-axis consistent
+        ax.legend()
+
+    plt.tight_layout()
+    return fig
 
 def plot_2D_trajectories(
     y, y_pred_list, t_feed,

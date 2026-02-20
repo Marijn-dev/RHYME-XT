@@ -3,9 +3,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import pickle, yaml
 from pathlib import Path
-from RHYME_XT import print_gpu_info, TrajectoryDataset,TrajectoryDataset_DeepONet, TrunkNet,RHYME_XT_Model, DeepONet_Model
+from RHYME_XT import print_gpu_info, TrajectoryDataset,TrajectoryDataset_DeepONet, TrunkNet,RHYME_XT_Model, DeepONet_Model, CompleteTrajectoryDataset_DeepONet
 from RHYME_XT.train import EarlyStopping, train_step, validate_DeepONet, train_step_DeepONet
-from RHYME_XT.utils import trajectory,plot_space_time_trajectory
+from RHYME_XT.utils import trajectory,plot_space_time_trajectory, plot_simulation_results
 from argparse import ArgumentParser
 import time
 import matplotlib.pyplot as plt
@@ -16,13 +16,13 @@ torch.set_default_dtype(torch.float32)
 
 hyperparams = {
     'branch_size_ic': 120,
-    'branch_depth_ic': 4,
+    'branch_depth_ic': 8,
     'branch_size_f': 120,
-    'branch_depth_f': 4,
+    'branch_depth_f': 8,
     'trunk_size': 120,
     'trunk_depth':8,
     'modes':250,
-    'batch_size': 128,
+    'batch_size': 16,
     'location_scaling':1,                 # Scale the location inputs to the trunk net by this factor (normalization) 
     'lr': 0.00011614090101177696,
     'n_epochs': 1000,                        # Number of epochs to train complete model for
@@ -62,15 +62,15 @@ def main():
 
     sys_args = ap.parse_args()
     data_path = Path(sys_args.load_path)
-    run = wandb.init(project='DeepONet', name=sys_args.name, config=hyperparams)
+    run = wandb.init(project='del', name=sys_args.name, config=hyperparams)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     with data_path.open('rb') as f:
         data = pickle.load(f)
 
-    train_data = TrajectoryDataset_DeepONet(data["train"])
-    val_data = TrajectoryDataset_DeepONet(data["val"])
-    test_data = TrajectoryDataset_DeepONet(data["test"])
+    train_data = CompleteTrajectoryDataset_DeepONet(data["train"])
+    val_data = CompleteTrajectoryDataset_DeepONet(data["val"])
+    test_data = CompleteTrajectoryDataset_DeepONet(data["test"])
     locations = data['Locations_online']*wandb.config['location_scaling'] 
      
     DeepONet_model_args = {
@@ -126,7 +126,7 @@ def main():
                                es_delta=wandb.config['es_delta'])
 
     bs = wandb.config['batch_size']
-    train_dl = DataLoader(train_data, batch_size=bs, shuffle=True)
+    train_dl = DataLoader(train_data, batch_size=bs, shuffle=False)
     val_dl = DataLoader(val_data, batch_size=bs, shuffle=True)
     test_dl = DataLoader(test_data, batch_size=bs, shuffle=True)
 
@@ -178,6 +178,12 @@ def main():
             run.summary["DeepONet/best_epoch"] = epoch + 1
 
             # ### Visualize trajectory in WB ###
+            for example in train_dl:
+                x0, y, u, t = example
+                y_pred = model(x0.to(device),u.to(device), t.to(device), locations.to(device))
+                fig = plot_simulation_results(y_pred[0],y[0])
+                wandb.log({"DeepONet/Test trajectory": wandb.Image(fig),"DeepONet/Best_epoch": epoch+1})
+                break
             # y,x0_feed,t_feed,u_feed,deltas_feed = trajectory(data['test'],trajectory_index=0,delta=test_data.delta) 
             # y_pred, basis_functions = model(x0_feed.to(device), u_feed.to(device),x_out_test.view(-1,1).to(device),deltas_feed.to(device),x_in.view(-1,1).to(device))
             # time_dim, space_dim = y.shape

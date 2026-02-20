@@ -166,6 +166,8 @@ class DeepONet_Model(nn.Module):
         
         super(DeepONet_Model, self).__init__()
 
+        self.output_dim = output_dim
+
         self.branch_ic = FFNet(in_size=state_dim,
             out_size=modes,
             hidden_size=branch_depth_ic *
@@ -183,38 +185,45 @@ class DeepONet_Model(nn.Module):
             hidden_size=trunk_depth *
             (trunk_size, ), 
             use_batch_norm=use_batch_norm)
+        # self.trunk = TrunkNet(
+        #     in_size=2,               # t and x
+        #     out_size=2*modes,            # Match this to your Branch net output size
+        #     fourier_features=64,     # Number of random frequencies
+        #     hidden_size=[128,128,128,128],  # Hidden layer widths
+        #     use_batch_norm=False,    # UsDeepONets
+        #     dropout_prob=0.0
+        #     )
 
         self.output_NN = FFNet(in_size=modes*2,out_size = 1,hidden_size=[120,120,120],use_batch_norm=use_batch_norm)
 
     def forward(self, x0, u, t, locations):
-        # concat x0 and f for branch inputs
-        # x0_u = torch.concat((x0,u),dim=1)
-        # # branch_out = self.branch(x0_u)
+        nr_trajectories, nr_periods, segment_length, _ = t.shape
+        L = locations.shape[0]
 
         branch_x0_out = self.branch_ic(x0)
         branch_f_out = self.branch_f(u)
-        branch_out = torch.cat([branch_x0_out,branch_f_out],dim=1)
 
-        B, T, _ = t.shape
-        L = locations.shape[0]
-        # Expand time to (B, T, L, 1)
-        time_exp = t.unsqueeze(2).expand(B, T, L, 1)
-        # Expand x to (B, T, L, 1)
-        locations_exp = locations.view(1, 1, L, 1).expand(B, T, L, 1)
-        # Concatenate along last dim → (B, T, L, 2)
+        time_exp = t.unsqueeze(3).expand(nr_trajectories, nr_periods, segment_length, L, 1)
+        locations_exp = locations.view(1, 1, 1, L, 1).expand(nr_trajectories, nr_periods, segment_length, L, 1)
         coords = torch.cat([time_exp, locations_exp], dim=-1)
-        # Flatten T and L → (B, T*L, 2)
-        coords = coords.view(B, T * L, 2)
+        coords = coords.view(nr_trajectories, nr_periods, segment_length * L, 2)
         trunk_out = self.trunk(coords)
 
-        # Inner product
-        # out = torch.einsum("bi,bni->bn",branch_out, trunk_out)
-        # out = out.view(B,T,L)
+        y_pred = []
+        for period in range(0,nr_periods):
+            branch_out = torch.cat([branch_x0_out,branch_f_out[:,period,:]],dim=1)
+            out = torch.einsum("bi,bni->bni",branch_out, trunk_out[:,period,:,:])
+            out = self.output_NN(out)
+            out = out.view(nr_trajectories,segment_length,L)
+            
+            # use last prediction as new ic
+            branch_x0_out = self.branch_ic(out[:,-1,:])
+            y_pred.append(out)
 
-        # Nonlinear output 
-        output = torch.einsum("bi,bni->bni",branch_out,trunk_out)
-        out = self.output_NN(output)
-        out = out.view(B,T,L)
+        # (nr_periods, nr_trajectories,segment_length,_)
+        out = torch.stack(y_pred)
+        # (nr_trajectories, nr_periods,segment_length,_)
+        out = out.transpose(0,1)
         return out
 
 ### MLP ###
@@ -269,7 +278,7 @@ class TrunkNet(nn.Module):
 
         ### Fourier feature mapping to generate more features ###
         self.fourier_features = fourier_features
-        B = torch.normal(mean=0.0, std=0.5, size=(self.fourier_features, 1))
+        B = torch.normal(mean=0.0, std=0.5, size=(self.fourier_features, in_size))
         self.register_buffer("B", B)  
 
         self.layers = nn.ModuleList()

@@ -135,6 +135,63 @@ class TrajectoryDataset_DeepONet(Dataset):
         return (self.init_state[index], self.state[index],
                 self.input_data[index], self.time_data[index])
 
+class CompleteTrajectoryDataset_DeepONet(Dataset):
+    def __init__(self,
+                 raw_data: RawTrajectoryDataset,
+                ): 
+        
+        period = 5 # period of f(x,t) (hardcoded)
+        state_trajectory = []
+        input_trajectory = []
+        time_trajectory = []
+        init_state_trajectory = []
+        init_state_trajectory = []
+        for (_, _, time, y, _, u) in raw_data:
+            nr_periods = int((50//period)) # time_horzon of data (hardcoded)
+            segment_length = int((time.shape[0]//nr_periods))
+            break
+
+        for (x0, _, time, y, _, u) in raw_data:
+            start_idx = 1
+            state = []
+            time_data = []
+            input_data = []
+            for i in range(0,nr_periods):
+                end_idx = start_idx + segment_length
+                x0_segment = y[start_idx-1]
+                u_segment = u[i*nr_periods]
+                y_segment = y[start_idx:end_idx]
+                time_segment = time[start_idx:end_idx]# - time[start_idx-1]
+                start_idx = end_idx
+
+                input_data.append(u_segment)
+                state.append(y_segment)
+
+                time_data.append(time_segment)
+
+            init_state_trajectory.append(x0)
+            # init_state_trajectory.append(torch.stack(init_state).type(torch.get_default_dtype()))
+            state_trajectory.append(torch.stack(state).type(torch.get_default_dtype()))
+            time_trajectory.append(torch.stack(time_data).type(
+            torch.get_default_dtype()))
+            input_trajectory.append(torch.stack(input_data).type(
+            torch.get_default_dtype()))
+
+        self.init_state_trajectory = torch.stack(init_state_trajectory).type(
+            torch.get_default_dtype())
+        self.state_trajectory = torch.stack(state_trajectory).type(torch.get_default_dtype())
+        self.input_trajectory = torch.stack(input_trajectory).type(
+            torch.get_default_dtype())
+        self.time_trajectory = torch.stack(time_trajectory).type(
+            torch.get_default_dtype())
+        self.len = len(self.init_state_trajectory)
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, index):
+        return (self.init_state_trajectory[index], self.state_trajectory[index],
+                self.input_trajectory[index], self.time_trajectory[index])
 
 class TrajectoryDataset(Dataset):
 
