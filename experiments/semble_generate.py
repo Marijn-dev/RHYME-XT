@@ -19,7 +19,7 @@ def main():
     sampler = make_trajectory_sampler(settings)
     postprocess = get_postprocess(settings["dynamics"]["name"])
     
-    train_data, val_data, test_data, U, S = generate(args,
+    train_data, val_data, test_data = generate(args,
                                                sampler,
                                                postprocess=postprocess) 
     
@@ -33,8 +33,6 @@ def main():
         "test": test_data,
         "settings": settings,
         "args": vars(args),
-        "U": U,
-        "S": S,
         "Locations_offline":  locations_online,
         "Locations_online":  locations_online,
     }

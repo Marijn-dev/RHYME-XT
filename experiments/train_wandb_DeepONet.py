@@ -15,16 +15,18 @@ import os
 torch.set_default_dtype(torch.float32)
 
 hyperparams = {
-    'branch_size': 250,
-    'branch_depth': 3,
-    'trunk_size': 250,
-    'trunk_depth':3,
-    'modes':150,
-    'batch_size': 64,
+    'branch_size_ic': 120,
+    'branch_depth_ic': 4,
+    'branch_size_f': 120,
+    'branch_depth_f': 4,
+    'trunk_size': 120,
+    'trunk_depth':8,
+    'modes':250,
+    'batch_size': 128,
     'location_scaling':1,                 # Scale the location inputs to the trunk net by this factor (normalization) 
     'lr': 0.00011614090101177696,
-    'n_epochs': 100,                        # Number of epochs to train complete model for
-    'es_patience': 10,
+    'n_epochs': 1000,                        # Number of epochs to train complete model for
+    'es_patience': 30,
     'es_delta': 1e-7,
     'sched_patience': 5,
     'sched_factor': 2,
@@ -67,7 +69,6 @@ def main():
         data = pickle.load(f)
 
     train_data = TrajectoryDataset_DeepONet(data["train"])
-
     val_data = TrajectoryDataset_DeepONet(data["val"])
     test_data = TrajectoryDataset_DeepONet(data["test"])
     locations = data['Locations_online']*wandb.config['location_scaling'] 
@@ -77,8 +78,10 @@ def main():
         'control_dim': int(data["train"].control_dim),
         'output_dim': int(data["train"].output_dim),
         'modes': wandb.config["modes"],
-        'branch_size': wandb.config["branch_size"],
-        'branch_depth': wandb.config["branch_depth"],
+        'branch_size_ic': wandb.config["branch_size_ic"],
+        'branch_depth_ic': wandb.config["branch_depth_ic"],
+        'branch_size_f': wandb.config["branch_size_f"],
+        'branch_depth_f': wandb.config["branch_depth_f"],
         'trunk_size': wandb.config["trunk_size"],
         'trunk_depth': wandb.config["trunk_depth"],
         'use_batch_norm': False,

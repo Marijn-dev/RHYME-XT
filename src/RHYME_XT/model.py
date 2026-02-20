@@ -156,30 +156,44 @@ class DeepONet_Model(nn.Module):
                  control_dim,
                  output_dim, 
                  modes,
-                 branch_size,
-                 branch_depth,
+                 branch_size_ic,
+                 branch_depth_ic,
+                 branch_size_f,
+                 branch_depth_f,
                  trunk_size,
                  trunk_depth,
                  use_batch_norm):
         
         super(DeepONet_Model, self).__init__()
 
-        self.branch = FFNet(in_size=state_dim+control_dim,
+        self.branch_ic = FFNet(in_size=state_dim,
             out_size=modes,
-            hidden_size=branch_depth *
-            (branch_size, ), 
+            hidden_size=branch_depth_ic *
+            (branch_size_ic, ), 
             use_batch_norm=use_batch_norm)
 
-        self.trunk = FFNet(in_size=2,
+        self.branch_f = FFNet(in_size=control_dim,
             out_size=modes,
+            hidden_size=branch_depth_f *
+            (branch_size_f, ), 
+            use_batch_norm=use_batch_norm)
+        
+        self.trunk = FFNet(in_size=2,
+            out_size=modes*2,
             hidden_size=trunk_depth *
             (trunk_size, ), 
             use_batch_norm=use_batch_norm)
 
+        self.output_NN = FFNet(in_size=modes*2,out_size = 1,hidden_size=[50,50],use_batch_norm=use_batch_norm)
+
     def forward(self, x0, u, t, locations):
         # concat x0 and f for branch inputs
-        x0_u = torch.concat((x0,u),dim=1)
-        branch_out = self.branch(x0_u)
+        # x0_u = torch.concat((x0,u),dim=1)
+        # # branch_out = self.branch(x0_u)
+
+        branch_x0_out = self.branch_ic(x0)
+        branch_f_out = self.branch_f(u)
+        branch_out = torch.cat([branch_x0_out,branch_f_out],dim=1)
 
         B, T, _ = t.shape
         L = locations.shape[0]
@@ -194,7 +208,12 @@ class DeepONet_Model(nn.Module):
         trunk_out = self.trunk(coords)
 
         # Inner product
-        out = torch.einsum("bi,bni->bn",branch_out, trunk_out)
+        # out = torch.einsum("bi,bni->bn",branch_out, trunk_out)
+        # out = out.view(B,T,L)
+
+        # Nonlinear output 
+        output = torch.einsum("bi,bni->bni",branch_out,trunk_out)
+        out = self.output_NN(output)
         out = out.view(B,T,L)
         return out
 
