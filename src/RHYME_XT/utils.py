@@ -465,6 +465,77 @@ def plot_space_time_trajectory(
     fig.tight_layout()
     return fig
 
+def plot_heatmap(y_true, y_pred_list, errors, t_feed, labels=None):
+    n_preds = len(y_pred_list)
+
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 18,
+        'axes.labelsize': 18,
+        'xtick.labelsize': 16,
+        'ytick.labelsize': 16,
+        'legend.fontsize': 20,
+        'font.size': 18,
+        'axes.grid': True,
+        'grid.linestyle': '-',
+        'grid.alpha': 0.7,
+        'lines.linewidth': 1.5,
+        'figure.figsize': [10, 4 * (n_preds + 0.9)],  # width fixed, height scales
+    })
+
+    y_true_np = y_true.T
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+
+    extent = [0, 50, 0, 25]
+    vmin = 0
+    vmax = 6
+
+    h_ratios = [1.0] + [1]*n_preds
+    fig = plt.figure(constrained_layout=True)
+    gs = GridSpec(n_preds + 1, 2, figure=fig, height_ratios=h_ratios, width_ratios=[1, 1], wspace=0.0001,hspace=0.002)
+
+    # Reference plot spanning both columns in first row
+    ax_ref = fig.add_subplot(gs[0, :])
+    im_ref = ax_ref.imshow(y_true_np, aspect='auto', origin='lower',
+                           cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+    ref_title = labels[0] if labels and len(labels) > 0 else "Reference"
+    ax_ref.set_aspect(0.30) 
+    ax_ref.set_title(ref_title)
+    ax_ref.set_xlabel('t')
+    ax_ref.set_ylabel('x')
+
+    # Prediction and error plots below
+    for i in range(n_preds):
+        ax_pred = fig.add_subplot(gs[i + 1, 0])
+        ax_err = fig.add_subplot(gs[i + 1, 1])
+        ax_row_title = fig.add_subplot(gs[i + 1, :])
+        ax_row_title.axis('off')  # hide axis lines and ticks
+        pred_title = labels[i + 1] if labels and len(labels) > i + 1 else f"Prediction {i + 1}"
+        ax_row_title.set_title(pred_title, pad=10)
+
+        pred = y_pred_np_list[i]
+        im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
+                                cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+        # ax_pred.set_title(fr"$\hat{{u}}(x,t)$ (Rel. $L^2$ Error: {errors[i]:.2f}%)")
+        ax_pred.set_title(r"$\hat{u}(x,t) $ ")
+        ax_pred.set_xlabel('t')
+        ax_pred.set_ylabel('x')
+
+        error = np.abs(pred - y_true_np)
+        im_err = ax_err.imshow(error, aspect='auto', origin='lower',
+                               cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+        # ax_err.set_title(fr"$|u(x,t)-\hat{{u}}(x,t)|$")
+        ax_err.set_title(fr"$|u(x,t)-\hat{{u}}(x,t)|, L^2: {errors[i]:.2f}\%$")
+        ax_err.set_xlabel('t')
+        ax_err.set_ylabel('x')
+
+    # # Shared colorbars: predictions left column, errors right column
+    # cbar_pred = fig.colorbar(im_pred, ax=fig.get_axes()[1::2], orientation='vertical', fraction=0.03, pad=0.02)
+    # cbar_pred.set_label("")
+
+    cbar_err = fig.colorbar(im_err, ax=fig.get_axes()[2::2], orientation='vertical', fraction=0.03, pad=0.02)
+    cbar_err.set_label("")
+    plt.show()
 
 def plot_2D_trajectories(
     y, y_pred_list, t_feed,
@@ -571,81 +642,81 @@ def plot_2D_trajectories(
     fig.tight_layout(rect=[0.02, 0.02, 1, 1],h_pad=2.0,w_pad=1)  # leave space for labels and legend
     plt.show()
 
-def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
-    n_preds = len(y_pred_list)
+# def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
+#     n_preds = len(y_pred_list)
 
-    mpl.rcParams.update({
-        'text.usetex': False,
-        'axes.titlesize': 18,
-        'axes.labelsize': 18,
-        'xtick.labelsize': 16,
-        'ytick.labelsize': 16,
-        'legend.fontsize': 20,
-        'font.size': 18,
-        'axes.grid': True,
-        'grid.linestyle': '-',
-        'grid.alpha': 0.7,
-        'lines.linewidth': 1.5,
-        'figure.figsize': [10, 4 * (n_preds + 0.9)],  # width fixed, height scales
-    })
+#     mpl.rcParams.update({
+#         'text.usetex': False,
+#         'axes.titlesize': 18,
+#         'axes.labelsize': 18,
+#         'xtick.labelsize': 16,
+#         'ytick.labelsize': 16,
+#         'legend.fontsize': 20,
+#         'font.size': 18,
+#         'axes.grid': True,
+#         'grid.linestyle': '-',
+#         'grid.alpha': 0.7,
+#         'lines.linewidth': 1.5,
+#         'figure.figsize': [10, 4 * (n_preds + 0.9)],  # width fixed, height scales
+#     })
 
-    y_true_np = y_true.T
-    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+#     y_true_np = y_true.T
+#     y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
 
-    extent = [0, 50, 0, 25]
-    vmin = 0
-    vmax = 1
+#     extent = [0, 50, 0, 25]
+#     vmin = 0
+#     vmax = 1
 
-    h_ratios = [1.0] + [1]*n_preds
-    fig = plt.figure(constrained_layout=True)
-    gs = GridSpec(n_preds + 1, 2, figure=fig, height_ratios=h_ratios, width_ratios=[1, 1], wspace=0.0001,hspace=0.002)
+#     h_ratios = [1.0] + [1]*n_preds
+#     fig = plt.figure(constrained_layout=True)
+#     gs = GridSpec(n_preds + 1, 2, figure=fig, height_ratios=h_ratios, width_ratios=[1, 1], wspace=0.0001,hspace=0.002)
 
-    # Reference plot spanning both columns in first row
-    ax_ref = fig.add_subplot(gs[0, :])
-    im_ref = ax_ref.imshow(y_true_np, aspect='auto', origin='lower',
-                           cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
-    ref_title = labels[0] if labels and len(labels) > 0 else "Reference"
-    ax_ref.set_aspect(0.30) 
-    ax_ref.set_title(ref_title)
-    ax_ref.set_xlabel('t')
-    ax_ref.set_ylabel('x')
+#     # Reference plot spanning both columns in first row
+#     ax_ref = fig.add_subplot(gs[0, :])
+#     im_ref = ax_ref.imshow(y_true_np, aspect='auto', origin='lower',
+#                            cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+#     ref_title = labels[0] if labels and len(labels) > 0 else "Reference"
+#     ax_ref.set_aspect(0.30) 
+#     ax_ref.set_title(ref_title)
+#     ax_ref.set_xlabel('t')
+#     ax_ref.set_ylabel('x')
 
-    # Prediction and error plots below
-    for i in range(n_preds):
-        ax_pred = fig.add_subplot(gs[i + 1, 0])
-        ax_err = fig.add_subplot(gs[i + 1, 1])
-        ax_row_title = fig.add_subplot(gs[i + 1, :])
-        ax_row_title.axis('off')  # hide axis lines and ticks
-        pred_title = labels[i + 1] if labels and len(labels) > i + 1 else f"Prediction {i + 1}"
-        ax_row_title.set_title(pred_title, pad=10)
+#     # Prediction and error plots below
+#     for i in range(n_preds):
+#         ax_pred = fig.add_subplot(gs[i + 1, 0])
+#         ax_err = fig.add_subplot(gs[i + 1, 1])
+#         ax_row_title = fig.add_subplot(gs[i + 1, :])
+#         ax_row_title.axis('off')  # hide axis lines and ticks
+#         pred_title = labels[i + 1] if labels and len(labels) > i + 1 else f"Prediction {i + 1}"
+#         ax_row_title.set_title(pred_title, pad=10)
 
-        pred = y_pred_np_list[i]
-        im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
-                                cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
-        ax_pred.set_title(r"$\tilde{u}(x,t)$")
-        ax_pred.set_xlabel('t')
-        ax_pred.set_ylabel('x')
+#         pred = y_pred_np_list[i]
+#         im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
+#                                 cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+#         ax_pred.set_title(r"$\tilde{u}(x,t)$")
+#         ax_pred.set_xlabel('t')
+#         ax_pred.set_ylabel('x')
 
-        error = np.abs(pred - y_true_np)
-        im_err = ax_err.imshow(error, aspect='auto', origin='lower',
-                               cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
-        ax_err.set_title(r"$|u(x,t)-\tilde{u}(x,t)|$")
-        ax_err.set_xlabel('t')
-        ax_err.set_ylabel('x')
+#         error = np.abs(pred - y_true_np)
+#         im_err = ax_err.imshow(error, aspect='auto', origin='lower',
+#                                cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+#         ax_err.set_title(r"$|u(x,t)-\tilde{u}(x,t)|$")
+#         ax_err.set_xlabel('t')
+#         ax_err.set_ylabel('x')
 
-    # # Shared colorbars: predictions left column, errors right column
-    # cbar_pred = fig.colorbar(im_pred, ax=fig.get_axes()[1::2], orientation='vertical', fraction=0.03, pad=0.02)
-    # cbar_pred.set_label("")
+#     # # Shared colorbars: predictions left column, errors right column
+#     # cbar_pred = fig.colorbar(im_pred, ax=fig.get_axes()[1::2], orientation='vertical', fraction=0.03, pad=0.02)
+#     # cbar_pred.set_label("")
 
-    cbar_err = fig.colorbar(im_err, ax=fig.get_axes()[2::2], orientation='vertical', fraction=0.03, pad=0.02)
-    cbar_err.set_label("")
-    plt.show()
+#     cbar_err = fig.colorbar(im_err, ax=fig.get_axes()[2::2], orientation='vertical', fraction=0.03, pad=0.02)
+#     cbar_err.set_label("")
+#     plt.show()
 
 def save_GIF(
     y, y_pred_list, t_feed,
     labels=None,
     filename="trajectory.gif",
-    fps=50
+    fps=75
     ):
 
     print(f"Creating GIF to save to {filename}...")
