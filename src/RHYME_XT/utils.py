@@ -639,7 +639,7 @@ def plot_2D_trajectories(
     fig.tight_layout(rect=[0.02, 0.02, 1, 1],h_pad=2.0,w_pad=1)  # leave space for labels and legend
     plt.show()
 
-def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
+def plot_heatmap(y_true, y_pred_list, errors, t_feed, labels=None):
     n_preds = len(y_pred_list)
 
     mpl.rcParams.update({
@@ -662,7 +662,7 @@ def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
 
     extent = [0, 50, 0, 25]
     vmin = 0
-    vmax = 1
+    vmax = 6
 
     h_ratios = [1.0] + [1]*n_preds
     fig = plt.figure(constrained_layout=True)
@@ -690,14 +690,16 @@ def plot_heatmap(y_true, y_pred_list, t_feed, labels=None):
         pred = y_pred_np_list[i]
         im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
                                 cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
-        ax_pred.set_title(r"$\tilde{u}(x,t)$")
+        # ax_pred.set_title(fr"$\hat{{u}}(x,t)$ (Rel. $L^2$ Error: {errors[i]:.2f}%)")
+        ax_pred.set_title(r"$\hat{u}(x,t) $ ")
         ax_pred.set_xlabel('t')
         ax_pred.set_ylabel('x')
 
         error = np.abs(pred - y_true_np)
         im_err = ax_err.imshow(error, aspect='auto', origin='lower',
                                cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
-        ax_err.set_title(r"$|u(x,t)-\tilde{u}(x,t)|$")
+        # ax_err.set_title(fr"$|u(x,t)-\hat{{u}}(x,t)|$")
+        ax_err.set_title(fr"$|u(x,t)-\hat{{u}}(x,t)|, L^2: {errors[i]:.2f}\%$")
         ax_err.set_xlabel('t')
         ax_err.set_ylabel('x')
 
@@ -713,7 +715,7 @@ def save_GIF(
     y, y_pred_list, t_feed,
     labels=None,
     filename="trajectory.gif",
-    fps=50
+    fps=75
     ):
 
     print(f"Creating GIF to save to {filename}...")
