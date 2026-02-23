@@ -60,7 +60,10 @@ def validate_DeepONet(data, locations, loss_fn, model, device):
     with torch.no_grad():
         for example in data:
             x0, y, u, t = example
-            y_pred = model(x0.to(device),u.to(device), t.to(device), locations.to(device))
+            print('y:', y.shape)
+            y_pred = model(x0.to(device),u.to(device), t.to(device), 
+            locations.to(device))
+            print('y_pred:', y_pred.shape)
             loss = loss_fn(y.to(device), y_pred)
             vl += loss.item()
     return vl / len(data)

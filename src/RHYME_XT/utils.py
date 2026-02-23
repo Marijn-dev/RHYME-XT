@@ -210,7 +210,7 @@ def prepare_model_inputs_DeepONet(x0,t,u,delta,time_horizon,samples):
     for i in range(0,nr_periods):
         end_idx = start_idx + segment_length
         u_segment = u[i*nr_periods]
-        time_segment = t[start_idx:end_idx] - t[start_idx-1].unsqueeze(0)
+        time_segment = t[start_idx:end_idx]  - t[start_idx-1].unsqueeze(0)
         start_idx = end_idx
         
         input_data.append(u_segment)

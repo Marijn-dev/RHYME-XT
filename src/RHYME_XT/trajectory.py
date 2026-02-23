@@ -161,7 +161,7 @@ class CompleteTrajectoryDataset_DeepONet(Dataset):
                 x0_segment = y[start_idx-1]
                 u_segment = u[i*nr_periods]
                 y_segment = y[start_idx:end_idx]
-                time_segment = time[start_idx:end_idx]# - time[start_idx-1]
+                time_segment = time[start_idx:end_idx] - time[start_idx-1]
                 start_idx = end_idx
 
                 input_data.append(u_segment)
