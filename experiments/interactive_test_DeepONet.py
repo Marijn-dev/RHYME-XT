@@ -112,11 +112,11 @@ def main():
 
     error = relative_l2_error(y_pred, y)
     print(f"Relative L2 Error: {error * 100:.2f}%")
-    save_results = True
+    save_results = False
     if save_results == True:
         np.savez('results_don_trajectory.npz', 
                     y_pred=y_pred, 
-                    t_feed=t_feed, 
+                    t=t_feed, 
                     y=y) 
         
     _, t_feed, _, _ = pack_model_inputs(
@@ -169,5 +169,6 @@ def main():
     # plot_2D_fixedspace(
     #     y, [y_pred], t_feed,
     #     labels=[''])
+    save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'DeepONet'])
 if __name__ == "__main__":
     main()
