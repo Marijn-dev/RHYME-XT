@@ -40,22 +40,23 @@ def main():
     L2_error_don = np.square(y - y_pred_don)
     print("L2 error",np.mean(L2_error_don))
 
-    L2_error_don_relative = relative_l2_error(y_pred_don, y)
+    L2_error_don_relative = 100*relative_l2_error(y_pred_don, y)
     # print(f"Relative L2 Error: {error * 100:.2f}%")
     
     L2_error_rhyme = np.square(y - y_pred_rhyme)
 
-    L2_error_rhyme_relative = relative_l2_error(y_pred_rhyme, y)
+    L2_error_rhyme_relative = 100*relative_l2_error(y_pred_rhyme, y)
 
     # Heatmap plot
     plot_heatmap(
     y_rhyme, [y_pred_rhyme, y_pred_don], [L2_error_rhyme_relative, L2_error_don_relative], t_don,
-    labels=['Ground-truth', 'RHYME-XT', "DeepONet"])
-    # Slider plot
-    plot_slider(y, [y_pred_rhyme,y_pred_don], t_feed, labels=['Ground-truth', 'RHYME-XT', 'DeepONet'])
+    labels=['Ground truth', 'RHYME-XT', "DeepONet"])
 
-    # Save GIF
-    save_GIF(y,[y_pred_rhyme, y_pred_don],t_feed,labels=['Ground-truth', 'RHYME-XT', 'DeepONet'])
+    # Slider plot
+    # plot_slider(y, [y_pred_rhyme,y_pred_don], t_feed, labels=['Ground-truth', 'RHYME-XT', 'DeepONet'])
+
+    # # Save GIF
+    # save_GIF(y,[y_pred_rhyme, y_pred_don],t_feed,labels=['Ground-truth', 'RHYME-XT', 'DeepONet'])
 
 if __name__ == '__main__':
     main()

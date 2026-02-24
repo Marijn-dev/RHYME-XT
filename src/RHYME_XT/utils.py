@@ -465,7 +465,7 @@ def plot_space_time_trajectory(
     fig.tight_layout()
     return fig
 
-def plot_heatmap(y_true, y_pred_list, errors, t_feed, labels=None):
+def plot_heatmap_witherror(y_true, y_pred_list, errors, t_feed, labels=None):
     n_preds = len(y_pred_list)
 
     mpl.rcParams.update({
@@ -537,6 +537,61 @@ def plot_heatmap(y_true, y_pred_list, errors, t_feed, labels=None):
     cbar_err.set_label("")
     plt.show()
 
+def plot_heatmap(y_true, y_pred_list, errors, t_feed, labels=None):
+    n_preds = len(y_pred_list)
+    n_total = n_preds + 1 # Reference + Predictions
+
+    mpl.rcParams.update({
+        'text.usetex': False,
+        'axes.titlesize': 20,
+        'axes.labelsize': 16,
+        'xtick.labelsize': 20,
+        'ytick.labelsize': 20,
+        'legend.fontsize': 20,
+        'font.size': 28,
+        'axes.grid': False, # Heatmaps usually look better without grids
+        # 'figure.figsize': [10, 4 * n_total], 
+        'figure.figsize': [12,20]
+    })
+
+    y_true_np = y_true.T
+    y_pred_np_list = [y_pred.T for y_pred in y_pred_list]
+
+    extent = [0, 50, -10, 10]
+    vmin, vmax = 0, 6
+
+    # Create figure with shared X axis
+    fig, axes = plt.subplots(n_total, 1, sharex=True, constrained_layout=True)
+    
+    # 1. Reference Plot (Top)
+    ax_ref = axes[0]
+    im_ref = ax_ref.imshow(y_true_np, aspect='auto', origin='lower',
+                           cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+    ref_title = labels[0] if labels else "Reference $u(x,t)$"
+    ax_ref.set_title(ref_title)
+    ax_ref.set_ylabel('location x')
+
+    # 2. Prediction Plots
+    for i in range(n_preds):
+        ax_pred = axes[i + 1]
+        pred = y_pred_np_list[i]
+        
+        im_pred = ax_pred.imshow(pred, aspect='auto', origin='lower',
+                                 cmap='viridis', vmin=vmin, vmax=vmax, extent=extent)
+        
+        # Using the simplified L^2 title you requested
+        pred_label = labels[i+1] if (labels and len(labels) > i+1) else f"Prediction {i+1}"
+        # ax_pred.set_title(fr"{pred_label}, $L^2: {errors[i]:.2f}\%$")
+        ax_pred.set_title(fr"{pred_label}")
+        ax_pred.set_ylabel('location x',fontsize=16)
+
+    # Shared X label on the bottom plot only
+    axes[-1].set_xlabel('time t',fontsize=16)
+
+    # Add a single colorbar for the entire figure
+    cbar = fig.colorbar(im_ref, ax=axes.tolist(), orientation='vertical', fraction=0.03, pad=0.02)
+    
+    plt.show()
 def plot_2D_trajectories(
     y, y_pred_list, t_feed,
     labels=None,
@@ -564,7 +619,7 @@ def plot_2D_trajectories(
         'grid.linestyle': '-',
         'grid.alpha': 0.7,
         'lines.linewidth': 1.5,
-        'figure.figsize': [10, 4],  # width x height
+        'figure.figsize': [15, 10],  # width x height
     })
     colors = ["black", "#0072BD", "#D95319", "#77AC30", "#7E2F8E"]
     linestyles = ['-', '--', ':', '-.', '-']
@@ -577,7 +632,7 @@ def plot_2D_trajectories(
     global_min = min(arr.min() for arr in all_data)
     global_max = max(arr.max() for arr in all_data)
 
-    x = np.linspace(0, 25, y.shape[1])
+    x = np.linspace(-10, 10, y.shape[1])
 
     n_cols = min(4, len(time_indices))
     n_rows = 2
@@ -588,7 +643,7 @@ def plot_2D_trajectories(
     if n_cols == 1:
         axs = axs.reshape(n_rows, 1)
 
-    x = np.linspace(0, 25, y.shape[1])
+    x = np.linspace(-10, 10, y.shape[1])
 
     for i, t in enumerate(time_indices):
         ax = axs[0,i]
@@ -602,7 +657,7 @@ def plot_2D_trajectories(
         ax.set_title(f"b = {t_feed[t].item():.1f}")
         ax.grid(True)
         # Remove individual labels
-        ax.set_xlabel('x')
+        ax.set_xlabel('location x')
     
 
     for i, idx in enumerate(space_indices):
@@ -614,30 +669,33 @@ def plot_2D_trajectories(
                     color=colors[(j + 1) % len(colors)],
                     linestyle=linestyles[(j + 1) % len(linestyles)])
         ax.set_ylim(global_min, global_max)
-        ax.set_title(f"a = {x[idx]:.0f}")
+        ax.set_title(f"a = {x[idx]:.1f}")
         ax.grid(True)
         # Remove individual labels
-        ax.set_xlabel('t')
+        ax.set_xlabel('time t')
         ax.set_ylabel('')
 
-   
-    fig.text(0.01, 0.70,r'u(x,t=b)', va='center', ha='center',
-         rotation='vertical', fontsize=20)
+    axs[1,0].set_ylabel(r'$u(x=a,t)$')
+    axs[0,0].set_ylabel(r'$u(x,t=b)$')
 
-    # Second row shared y-axis label
-    fig.text(0.01, 0.30, r'u(x=a,t)', va='center', ha='center',
-         rotation='vertical', fontsize=20)
+   
+    # fig.text(0.01, 0.70,r'u(x,t=b)', va='center', ha='center',
+    #      rotation='vertical', fontsize=20)
+
+    # # Second row shared y-axis label
+    # fig.text(0.01, 0.30, r'u(x=a,t)', va='center', ha='center',
+    #      rotation='vertical', fontsize=20)
 
     # Add legend as before
     handles, legend_labels = axs[0, 0].get_legend_handles_labels()
-    legend = fig.legend(handles, legend_labels,
-                        loc='center right',
-                        frameon=True,
-                        framealpha=1.0,
-                        edgecolor='black',
-                        facecolor='white',
-                        ncol=1)
-    legend.set_draggable(True)
+    # legend = fig.legend(handles, legend_labels,
+    #                     loc='center right',
+    #                     frameon=True,
+    #                     framealpha=1.0,
+    #                     edgecolor='black',
+    #                     facecolor='white',
+    #                     ncol=1)
+    # legend.set_draggable(True)
 
     fig.tight_layout(rect=[0.02, 0.02, 1, 1],h_pad=2.0,w_pad=1)  # leave space for labels and legend
     plt.show()

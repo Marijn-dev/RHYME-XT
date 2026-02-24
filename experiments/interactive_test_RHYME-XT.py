@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib as mpl
 
 from RHYME_XT import RHYME_XT_Model, TrunkNet
-from RHYME_XT.utils import pack_model_inputs, plot_2D_trajectories, plot_heatmap, plot_slider, save_GIF, plot_2D_fixedspace, plot_heatmap_witherror
+from RHYME_XT.utils import pack_model_inputs, plot_2D_trajectories, plot_heatmap, plot_slider, save_GIF, plot_2D_fixedspace
 from generate_data import make_trajectory_sampler
 
 from argparse import ArgumentParser
@@ -63,13 +63,28 @@ def main():
 
     
     time_horizon = metadata["data_args"]["time_horizon"]
-    time_horizon = 50.0
-    n_samples = 200
-    time_integrate = time()
-    x0, t, y, u,y_full = sampler.get_example(time_horizon=time_horizon,
-                                    n_samples=int(1 +
-                                                    n_samples))
-    
+    time_horizon = 250
+    n_samples = int(200 * time_horizon / 50)
+
+    # save = False
+    # if save == True:
+    #     print(time_horizon)
+    #     x0, t, y, u,y_full = sampler.get_example   (time_horizon=time_horizon, n_samples=n_samples)
+    #     # Save to a single compressed file
+    #     np.savez('test_data.npz', 
+    #             x0=x0, 
+    #             t=t, 
+    #             y=y, 
+    #             u=u)
+    # else: 
+    #     data = np.load('test_data.npz')
+    #     # Extract the variables back to their names
+    #     x0 = data['x0']
+    #     t = data['t']
+    #     y = data['y']
+    #     u = data['u']
+
+    x0, t, y, u,y_full = sampler.get_example   (time_horizon=time_horizon, n_samples=n_samples)
     idx = np.linspace(0, y.shape[1] - 1, 100, dtype=int)
     x0 = x0[idx]
     y = y[:,idx]
@@ -80,9 +95,6 @@ def main():
     locations_output = locations_output[idx]
     locations_input = locations_output
 
-    time_integrate = time() - time_integrate
-    time_predict = time()
-
     x0_feed, t_feed, u_feed, deltas_feed = pack_model_inputs(
         x0, t, u, delta)
 
@@ -90,32 +102,40 @@ def main():
         y_pred, basis_functions = model(x0_feed, u_feed, locations_output,deltas_feed,locations_input)
     y_pred = y_pred.cpu().numpy()
     y_pred = np.flip(y_pred, 0)
-    time_predict = time() - time_predict
-    
-    print(f"Timings: {time_integrate}, {time_predict}")
 
-    # y = y[:, tuple(bool(v) for v in sampler._dyn.mask)]
-    L1_error = np.abs(y - y_pred)
+    def relative_l2_error(y_pred, y_true):
+        # L2 norm of the difference / L2 norm of the truth
+        return np.linalg.norm(y_true - y_pred) / np.linalg.norm(y_true)
+
     L2_error = np.square(y - y_pred)
-    print("MAE error:",np.mean(L1_error))
-    print("MSE error:",np.mean(L2_error))
-    # t_feed = torch.flip(t_feed,dims=[0])
+    print("L2 error",np.mean(L2_error))
+
+    error = relative_l2_error(y_pred, y)
+    print(f"Relative L2 Error: {error * 100:.2f}%")
+    save_results = True
+    # if save_results == True:
+    #     np.savez('results_rhyme-xt.npz', 
+    #                 y_pred=y_pred, 
+    #                 t=t_feed, 
+    #                 y=y) 
+        
+    t_feed = torch.flip(t_feed,dims=[0])
     # 2D Plot of slices in the trajectory
     plot_2D_trajectories(
     y, [y_pred], torch.flip(t_feed,dims=[0]),
     labels=['Ground-truth', 'RHYME-XT'],
-    time_indices=[int(y.shape[0]*0.25), int(y.shape[0]*0.5), int(y.shape[0]*0.95)],
-    space_indices=[int(y.shape[1]*0.25), int(y.shape[1]*0.5), int(y.shape[1]*0.95)])
+    time_indices=[int(y.shape[0]*0.25), int(y.shape[0]*0.5), int(y.shape[0]*0.75)],
+    space_indices=[int(y.shape[1]*0.25), int(y.shape[1]*0.5), int(y.shape[1]*0.75)])
 
     # Heatmap plot
     plot_heatmap(
-    y, [y_pred], t_feed,
+    y, [y_pred], None,t_feed,
     labels=['Ground-truth', 'RHYME-XT'])
 
-    # Slider plot
-    plot_slider(y, [y_pred], t_feed, labels=['Ground-truth', 'RHYME-XT'])
+    # # Slider plot
+    # plot_slider(y, [y_pred], t_feed, labels=['Ground-truth', 'RHYME-XT'])
 
-    # Save GIF
+    # # Save GIF
     # save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'RHYME-XT'])
 
 
