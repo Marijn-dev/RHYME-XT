@@ -32,6 +32,10 @@ def parse_args():
 
     return ap.parse_args()
 
+def relative_l2_error(y_pred, y_true):
+    # L2 norm of the difference / L2 norm of the truth
+    return np.linalg.norm(y_true - y_pred) / np.linalg.norm(y_true)
+
 def main():
     args = parse_args()
 
@@ -80,85 +84,120 @@ def main():
         u = data['u']
     
     # time_integrate = time() - time_integrate
-    idx = np.linspace(0, y.shape[1] - 1, 100, dtype=int)
-    x0 = x0[idx]
-    y = y[:,idx]
-    u = u[:,idx]
-    locations_output = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) * metadata["location_scaling"]
-    locations_output = locations_output[idx]
-
-    time_predict = time()
-    x0, t_feed, u_feed = prepare_model_inputs_DeepONet(
-        x0, t, u, delta, time_horizon, n_samples)
-    y_pred_list = []
-    x0_feed = x0
-    y_torch = torch.tensor(y).type(torch.get_default_dtype())
-    print(y_torch.shape)
-    with torch.no_grad():
-        y_pred = model(x0_feed, u_feed.transpose(0,1), t_feed.transpose(0,1),locations_output)
- 
-        y_pred = y_pred.view(n_samples, y_torch.shape[1])
-
-    y_pred = torch.cat([x0, y_pred], dim=0)
-    y_pred = y_pred.cpu().numpy()
-    time_predict = time() - time_predict
-  
-    def relative_l2_error(y_pred, y_true):
-        # L2 norm of the difference / L2 norm of the truth
-        return np.linalg.norm(y_true - y_pred) / np.linalg.norm(y_true)
-
-    L2_error = np.square(y - y_pred)
-    print("L2 error",np.mean(L2_error))
-
-    error = relative_l2_error(y_pred, y)
-    print(f"Relative L2 Error: {error * 100:.2f}%")
     save_results = False
     if save_results == True:
-        np.savez('results_don_trajectory.npz', 
-                    y_pred=y_pred, 
-                    t=t_feed, 
-                    y=y) 
+        data = np.load('amari_T50.npz')
+        y_pred_results = []
+        y_results = []
+        t_results = []
+        mse_error = []
+        relative_error = []
+        t_data = []
+        for i in range(data['x0'].shape[0]):
+            print(i)
+            t = data['t'][i]
+            x0 = data['x0'][i]
+            y = data['y'][i]
+            u = data['u'][i]
+            idx = np.linspace(0, y.shape[1] - 1, 100, dtype=int)
+            locations_output = torch.tensor(sampler._dyn.locations,dtype=torch.get_default_dtype()) * metadata["location_scaling"]
+            locations_output = locations_output[idx]
+            locations_input = locations_output
+            x0 = x0[idx]
+            y = y[:,idx]
+            u = u[:,idx]
+            x0, t_feed, u_feed = prepare_model_inputs_DeepONet(
+                x0, t, u, delta, time_horizon, n_samples)
+            y_pred_list = []
+            x0_feed = x0
+            y_torch = torch.tensor(y).type(torch.get_default_dtype())
+            with torch.no_grad():
+                y_pred = model(x0_feed, u_feed.transpose(0,1), t_feed.transpose(0,1),locations_output)
         
-    _, t_feed, _, _ = pack_model_inputs(
-        x0, t, u, delta)
-    x = torch.arange(n_samples+1).numpy()
-    plt.figure(figsize=(8, 5))
-    i = 25
-    plt.plot(x, y_pred[:,i],label='pred')
-    plt.plot(x, y[:,i], label='true')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+                y_pred = y_pred.view(n_samples, y_torch.shape[1])
 
-    x = torch.arange(100).numpy()
-    plt.figure(figsize=(8, 5))
-    i = 50
-    plt.plot(x, y_pred[20,:],label='pred')
-    plt.plot(x, y[20,:], label='true')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+            y_pred = torch.cat([x0, y_pred], dim=0)
+            y_pred = y_pred.cpu().numpy()
+
+            y_pred_results.append(y_pred)
+            y_results.append(y)
+            t_data.append(t_feed)
+
+            L2_error = np.square(y - y_pred)
+            print("L2 error",np.mean(L2_error))
+            mse_error.append(np.mean(L2_error))
+            error = relative_l2_error(y_pred, y)
+            print(f"Relative L2 Error: {error * 100:.2f}%")
+            relative_error.append(error*100)
+        
+        y_pred_results = np.array(y_pred_results)
+        y_results  = np.array(y_results)
+        mse_error  = np.array(mse_error)
+        relative_error  = np.array(relative_error)
+        t_data = np.array(t_data)
+
+        np.savez_compressed(
+            'amari_T50_results_DON_FULL.npz', 
+            y_pred=y_pred_results, 
+            y=y_results, 
+            mse=mse_error, 
+            relative_error=relative_error,
+            t = t_data
+        )
+
+    analyze_results = True
+    if analyze_results == True:
+        results_T50 = np.load("amari_T50_results_DON_FULL.npz")
+        error_T50 = results_T50['relative_error']
+        print(np.mean(error_T50))
+        print(np.std(error_T50))
+    # save_results = False
+    # if save_results == True:
+    #     np.savez('results_don_trajectory.npz', 
+    #                 y_pred=y_pred, 
+    #                 t=t_feed, 
+    #                 y=y) 
+        
+    # _, t_feed, _, _ = pack_model_inputs(
+    #     x0, t, u, delta)
+    # x = torch.arange(n_samples+1).numpy()
+    # plt.figure(figsize=(8, 5))
+    # i = 25
+    # plt.plot(x, y_pred[:,i],label='pred')
+    # plt.plot(x, y[:,i], label='true')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+
+    # x = torch.arange(100).numpy()
+    # plt.figure(figsize=(8, 5))
+    # i = 50
+    # plt.plot(x, y_pred[20,:],label='pred')
+    # plt.plot(x, y[20,:], label='true')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
     # 2D Plot of slices in the trajectory (both space and time)
     # plot_2D_trajectories(
     # y, [y_pred], t_feed,
     # labels=['Ground-truth', 'RHYME-XT'],
     # time_indices=[int(y.shape[0]*0.25), int(y.shape[0]*0.5), int(y.shape[0]*0.99)],
     # space_indices=[int(y.shape[1]*0.25), int(y.shape[1]*0.5), int(y.shape[1]*0.95)])
-    plt.figure(figsize=(10, 6))
-    plt.imshow(y_pred.T, aspect='auto', cmap='viridis', origin='lower')
-    plt.colorbar(label='Value')
-    plt.xlabel('Index (0-500)')  # 501 points along x-axis
-    plt.ylabel('Feature (0-99)') # 100 features along y-axis
-    plt.title('2D Heatmap')
-    plt.show()
+    # plt.figure(figsize=(10, 6))
+    # plt.imshow(y_pred.T, aspect='auto', cmap='viridis', origin='lower')
+    # plt.colorbar(label='Value')
+    # plt.xlabel('Index (0-500)')  # 501 points along x-axis
+    # plt.ylabel('Feature (0-99)') # 100 features along y-axis
+    # plt.title('2D Heatmap')
+    # plt.show()
 
-    plt.figure(figsize=(10, 6))
-    plt.imshow(y.T, aspect='auto', cmap='viridis', origin='lower')
-    plt.colorbar(label='Value')
-    plt.xlabel('Index (0-500)')  # 501 points along x-axis
-    plt.ylabel('Feature (0-99)') # 100 features along y-axis
-    plt.title('2D Heatmap')
-    plt.show()
+    # plt.figure(figsize=(10, 6))
+    # plt.imshow(y.T, aspect='auto', cmap='viridis', origin='lower')
+    # plt.colorbar(label='Value')
+    # plt.xlabel('Index (0-500)')  # 501 points along x-axis
+    # plt.ylabel('Feature (0-99)') # 100 features along y-axis
+    # plt.title('2D Heatmap')
+    # plt.show()
     # print(y_pred.shape)
     # print(y)
     # # Heatmap plot
@@ -169,6 +208,6 @@ def main():
     # plot_2D_fixedspace(
     #     y, [y_pred], t_feed,
     #     labels=[''])
-    save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'DeepONet'])
+    # save_GIF(y,[y_pred],t_feed,labels=['Ground-truth', 'DeepONet'])
 if __name__ == "__main__":
     main()
