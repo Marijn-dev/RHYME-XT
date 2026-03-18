@@ -800,12 +800,12 @@ def save_GIF(
     y_np = y.T  # (nx, nt)
     y_pred_np_list = [y_pred.T for y_pred in y_pred_list] # if taking predictions
     t_feed = np.array(t_feed)
-    t_feed = np.flip(t_feed)
+    # t_feed = np.flip(t_feed)
     all_data = [y_np] + y_pred_np_list
     global_min = min(arr.min() for arr in all_data)
     global_max = max(arr.max() for arr in all_data)
 
-    x = np.linspace(0, 25, y.shape[1])
+    x = np.linspace(-10, 10, y.shape[1])
     nt = y.shape[0]
 
     # Set up figure
@@ -849,7 +849,7 @@ def save_GIF(
         return lines + [title]
 
     # Create animation
-    anim = FuncAnimation(fig, update, frames=nt, interval=1500/fps, blit=True)
+    anim = FuncAnimation(fig, update, frames=nt, interval=1000/fps, blit=True)
 
     # Save to GIF
     anim.save(filename, writer=PillowWriter(fps=fps))
