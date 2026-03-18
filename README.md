@@ -1,10 +1,10 @@
-# RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms
+# RHYME-XT: A Neural Operator for Spatiotemporal Control Systems
 
 ![Visualization of the architecture](assets/Architecture.png)
 
 ![Trajectory Animation](assets/trajectory.gif)
 
-See paper [Marijn Ruiter, _RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms_ (2025)](-) for a description of the architecture.
+<!-- See paper [Marijn Ruiter, _RHYME-XT: A Neural Operator for Modelling Excitable Spatio-Temporal Rhythms_ (2025)](-) for a description of the architecture. -->
 
 The `RHYME-XT` package provides the PyTorch module implementing the architecture,
 and some auxiliary functions which can be used for training.
